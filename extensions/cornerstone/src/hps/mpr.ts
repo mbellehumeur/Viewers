@@ -45,7 +45,21 @@ export const mpr: Types.HangingProtocol.Protocol = {
               value: true,
             },
           },
-          required: true,
+          required: false,
+        },
+      ],
+    },
+    srDisplaySet: {
+      seriesMatchingRules: [
+        {
+          weight: 1,
+          attribute: 'Modality',
+          constraint: {
+            equals: {
+              value: 'SR',
+            },
+          },
+          required: false,
         },
       ],
     },
@@ -56,26 +70,32 @@ export const mpr: Types.HangingProtocol.Protocol = {
       viewportStructure: {
         layoutType: 'grid',
         properties: {
-          rows: 1,
-          columns: 3,
+          rows: 2,
+          columns: 2,
           layoutOptions: [
             {
               x: 0,
               y: 0,
-              width: 1 / 3,
-              height: 1,
+              width: 1 / 2,
+              height: 1 / 2,
             },
             {
-              x: 1 / 3,
+              x: 1 / 2,
               y: 0,
-              width: 1 / 3,
-              height: 1,
+              width: 1 / 2,
+              height: 1 / 2,
             },
             {
-              x: 2 / 3,
-              y: 0,
-              width: 1 / 3,
-              height: 1,
+              x: 0,
+              y: 1 / 2,
+              width: 1 / 2,
+              height: 1 / 2,
+            },
+            {
+              x: 1 / 2,
+              y: 1 / 2,
+              width: 1 / 2,
+              height: 1 / 2,
             },
           ],
         },
@@ -129,6 +149,18 @@ export const mpr: Types.HangingProtocol.Protocol = {
           displaySets: [
             {
               id: 'activeDisplaySet',
+            },
+          ],
+        },
+        {
+          viewportOptions: {
+            viewportId: 'mpr-sr',
+            viewportType: 'dicom-sr',
+            allowUnmatchedView: true,
+          },
+          displaySets: [
+            {
+              id: 'srDisplaySet',
             },
           ],
         },

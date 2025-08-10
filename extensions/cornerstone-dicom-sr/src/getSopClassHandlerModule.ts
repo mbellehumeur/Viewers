@@ -22,7 +22,52 @@ const {
   CodeScheme: Cornerstone3DCodeScheme,
 } = adaptersSR.Cornerstone3D;
 
-type InstanceMetadata = Types.InstanceMetadata;
+type InstanceMetadata = OhifTypes.InstanceMetadata;
+
+type SRDisplaySet = OhifTypes.DisplaySet & {
+  isLoaded?: boolean;
+  isImagingMeasurementReport?: boolean;
+  referencedImages?: unknown[];
+  measurements?: unknown[];
+  instance: unknown;
+  SOPClassUID: string;
+  StudyInstanceUID: string;
+  SeriesInstanceUID: string;
+  load?: () => Promise<void>;
+};
+
+type ExtensionManagerLike = {
+  getDataSources: (id?: string) => unknown[];
+};
+
+type DataSourceLike = {
+  retrieve: {
+    bulkDataURI: (opts: {
+      BulkDataURI: string;
+      StudyInstanceUID: string;
+      SeriesInstanceUID: string;
+      SOPInstanceUID: string;
+    }) => Promise<unknown>;
+  };
+  getImageIdsForDisplaySet: (ds: unknown) => string[];
+};
+
+type Coord = {
+  ValueType: string;
+  GraphicType: string;
+  GraphicData: number[];
+  ReferencedSOPSequence?: {
+    ReferencedSOPInstanceUID: string;
+    ReferencedFrameNumber?: number;
+  };
+  ReferencedFrameOfReferenceSequence?: string;
+};
+
+// Helper: ConceptNameCodeSequence can be object or array; return the first item safely
+function _firstConcept(item: unknown) {
+  const seq = (item as { ConceptNameCodeSequence?: unknown })?.ConceptNameCodeSequence;
+  return Array.isArray(seq) ? seq[0] : seq;
+}
 
 /**
  * TODO
@@ -130,7 +175,8 @@ function _getDisplaySetsFromSeries(
     label: SeriesDescription || `${i18n.t('Series')} ${SeriesNumber} - ${i18n.t('SR')}`,
   };
 
-  displaySet.load = () => _load(displaySet, servicesManager, extensionManager);
+  (displaySet as unknown as SRDisplaySet).load = () =>
+    _load(displaySet as unknown as SRDisplaySet, servicesManager, extensionManager);
 
   return [displaySet];
 }
@@ -142,13 +188,13 @@ function _getDisplaySetsFromSeries(
  * @param extensionManager - The extension manager containing data sources.
  */
 async function _load(
-  srDisplaySet: Types.DisplaySet,
+  srDisplaySet: SRDisplaySet,
   servicesManager: AppTypes.ServicesManager,
   extensionManager: AppTypes.ExtensionManager
 ) {
   const { displaySetService, measurementService } = servicesManager.services;
-  const dataSources = extensionManager.getDataSources();
-  const dataSource = dataSources[0];
+  const dataSources = (extensionManager as unknown as ExtensionManagerLike).getDataSources();
+  const dataSource = dataSources[0] as DataSourceLike;
   const { ContentSequence } = srDisplaySet.instance;
 
   async function retrieveBulkData(obj, parentObj = null, key = null) {
@@ -165,7 +211,7 @@ async function _load(
           SOPInstanceUID: srDisplaySet.instance.SOPInstanceUID,
         });
         if (parentObj && key) {
-          parentObj[key] = new Float32Array(value);
+          parentObj[key] = new Float32Array(value as ArrayBuffer);
         }
       }
     }
@@ -204,12 +250,12 @@ async function _load(
 
   /** Subscribe to new displaySets as the source may come in after */
   displaySetService.subscribe(displaySetService.EVENTS.DISPLAY_SETS_ADDED, data => {
-    const { displaySetsAdded } = data;
+    const { displaySetsAdded } = (data as { displaySetsAdded?: unknown[] }) || {};
     /**
      * If there are still some measurements that have not yet been loaded into cornerstone,
      * See if we can load them onto any of the new displaySets.
      */
-    displaySetsAdded.forEach(newDisplaySet => {
+    (displaySetsAdded || []).forEach(newDisplaySet => {
       _checkIfCanAddMeasurementsToDisplaySet(
         srDisplaySet,
         newDisplaySet,
@@ -270,7 +316,7 @@ function _checkIfCanAddMeasurementsToDisplaySet(
     let measurement = unloadedMeasurements[j];
     const is3DMeasurement = measurement.coords?.[0]?.ValueType === 'SCOORD3D';
 
-    const onBeforeSRAddMeasurement = customizationService.getCustomization(
+    const onBeforeSRAddMeasurement: unknown = customizationService.getCustomization(
       'onBeforeSRAddMeasurement'
     );
 
@@ -288,6 +334,17 @@ function _checkIfCanAddMeasurementsToDisplaySet(
       is3DMeasurement &&
       _measurementBelongsToDisplaySet({ measurement, displaySet: newDisplaySet })
     ) {
+      try {
+        console.debug('[SR] Will add 3D SR annotation to displaySet', {
+          displaySetInstanceUID: newDisplaySet.displaySetInstanceUID,
+          FrameOfReferenceUID: newDisplaySet.FrameOfReferenceUID,
+          measurementFoR: measurement.coords?.[0]?.ReferencedFrameOfReferenceSequence,
+          graphicType: measurement.coords?.[0]?.GraphicType,
+          points: measurement.coords?.[0]?.GraphicData?.slice?.(0, 6),
+        });
+      } catch (_e) {
+        /* ignore logging errors */
+      }
       addSRAnnotation(measurement, null, null);
       measurement.loaded = true;
       measurement.displaySetInstanceUID = newDisplaySet.displaySetInstanceUID;
@@ -309,6 +366,18 @@ function _checkIfCanAddMeasurementsToDisplaySet(
       imageId &&
       _measurementReferencesSOPInstanceUID(measurement, ReferencedSOPInstanceUID, frame)
     ) {
+      try {
+        console.debug('[SR] Will add 2D SR annotation to imageId', {
+          displaySetInstanceUID: newDisplaySet.displaySetInstanceUID,
+          imageId,
+          frame,
+          sopInstanceUID: ReferencedSOPInstanceUID,
+          graphicType: measurement.coords?.[0]?.GraphicType,
+          points: measurement.coords?.[0]?.GraphicData?.slice?.(0, 6),
+        });
+      } catch (_e) {
+        /* ignore logging errors */
+      }
       addSRAnnotation(measurement, imageId, frame);
 
       // Update measurement properties
@@ -392,17 +461,51 @@ function getSopClassHandlerModule(params: OhifTypes.Extensions.ExtensionParams) 
  */
 function _getMeasurements(ImagingMeasurementReportContentSequence) {
   const ImagingMeasurements = ImagingMeasurementReportContentSequence.find(
-    item =>
-      item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.ImagingMeasurements
+    item => _firstConcept(item)?.CodeValue === CodeNameCodeSequenceValues.ImagingMeasurements
   );
 
+  // Fallback: if no ImagingMeasurements container, try to build directly from top-level geometry
   if (!ImagingMeasurements) {
+    const topLevel = _getSequenceAsArray(ImagingMeasurementReportContentSequence);
+    const hasGeometry = topLevel.some(group => isScoordOr3d(group) && !isTextPosition(group));
+    if (hasGeometry) {
+      const m = _processTID1410Measurement(topLevel);
+      try {
+        console.debug('[SR] Parsed fallback top-level measurement', {
+          graphicType: m?.coords?.[0]?.GraphicType,
+          valueType: m?.coords?.[0]?.ValueType,
+          points: m?.coords?.[0]?.GraphicData?.slice?.(0, 6),
+        });
+      } catch (_e) {
+        /* ignore logging errors */
+      }
+      return m ? [m] : [];
+    }
     return [];
   }
 
-  const MeasurementGroups = _getSequenceAsArray(ImagingMeasurements.ContentSequence).filter(
-    item => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.MeasurementGroup
+  const containerItems = _getSequenceAsArray(ImagingMeasurements.ContentSequence);
+  const MeasurementGroups = containerItems.filter(
+    item => _firstConcept(item)?.CodeValue === CodeNameCodeSequenceValues.MeasurementGroup
   );
+
+  // Fallback: no groups but geometry present inside container -> single measurement
+  if (!MeasurementGroups.length) {
+    const hasGeometry = containerItems.some(group => isScoordOr3d(group) && !isTextPosition(group));
+    if (hasGeometry) {
+      const m = _processTID1410Measurement(containerItems);
+      try {
+        console.debug('[SR] Parsed fallback container measurement', {
+          graphicType: m?.coords?.[0]?.GraphicType,
+          valueType: m?.coords?.[0]?.ValueType,
+          points: m?.coords?.[0]?.GraphicData?.slice?.(0, 6),
+        });
+      } catch (_e) {
+        /* ignore logging errors */
+      }
+      return m ? [m] : [];
+    }
+  }
 
   const mergedContentSequencesByTrackingUniqueIdentifiers =
     _getMergedContentSequencesByTrackingUniqueIdentifiers(MeasurementGroups);
@@ -436,12 +539,11 @@ function _getMergedContentSequencesByTrackingUniqueIdentifiers(MeasurementGroups
     const ContentSequence = _getSequenceAsArray(MeasurementGroup.ContentSequence);
 
     const TrackingUniqueIdentifierItem = ContentSequence.find(
-      item =>
-        item.ConceptNameCodeSequence.CodeValue ===
-        CodeNameCodeSequenceValues.TrackingUniqueIdentifier
+      item => _firstConcept(item)?.CodeValue === CodeNameCodeSequenceValues.TrackingUniqueIdentifier
     );
-    if (!TrackingUniqueIdentifierItem) {
+    if (!TrackingUniqueIdentifierItem?.UID) {
       console.warn('No Tracking Unique Identifier, skipping ambiguous measurement.');
+      return;
     }
 
     const trackingUniqueIdentifier = TrackingUniqueIdentifierItem.UID;
@@ -456,8 +558,7 @@ function _getMergedContentSequencesByTrackingUniqueIdentifiers(MeasurementGroups
       // Information in the merged ContentSequence anyway.
       ContentSequence.forEach(item => {
         if (
-          item.ConceptNameCodeSequence.CodeValue !==
-          CodeNameCodeSequenceValues.TrackingUniqueIdentifier
+          _firstConcept(item)?.CodeValue !== CodeNameCodeSequenceValues.TrackingUniqueIdentifier
         ) {
           mergedContentSequencesByTrackingUniqueIdentifiers[trackingUniqueIdentifier].push(item);
         }
@@ -504,33 +605,34 @@ function _processTID1410Measurement(mergedContentSequence) {
   const UIDREFContentItem = mergedContentSequence.find(group => group.ValueType === 'UIDREF');
 
   const TrackingIdentifierContentItem = mergedContentSequence.find(
-    item => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.TrackingIdentifier
+    item => _firstConcept(item)?.CodeValue === CodeNameCodeSequenceValues.TrackingIdentifier
   );
 
   if (!graphicItem) {
-    console.warn(
-      `graphic ValueType ${graphicItem.ValueType} not currently supported, skipping annotation.`
-    );
+    console.warn('No SCOORD/SCOORD3D found, skipping annotation.');
     return;
   }
 
   const NUMContentItems = mergedContentSequence.filter(group => group.ValueType === 'NUM');
 
-  const { ConceptNameCodeSequence: conceptNameItem } = graphicItem;
-  const { CodeValue: graphicValue, CodingSchemeDesignator: graphicDesignator } = conceptNameItem;
-  const graphicCode = `${graphicDesignator}:${graphicValue}`;
+  const conceptNameItem = _firstConcept(graphicItem);
+  const graphicValue = conceptNameItem?.CodeValue;
+  const graphicDesignator = conceptNameItem?.CodingSchemeDesignator;
+  const graphicCode =
+    graphicDesignator && graphicValue ? `${graphicDesignator}:${graphicValue}` : undefined;
 
   const pointDataItem = _getCoordsFromSCOORDOrSCOORD3D(graphicItem);
   const is3DMeasurement = pointDataItem.ValueType === 'SCOORD3D';
   const pointLength = is3DMeasurement ? 3 : 2;
-  const pointsLength = pointDataItem.GraphicData.length / pointLength;
+  const pointsLength = (pointDataItem.GraphicData?.length || 0) / pointLength;
 
   const measurement = {
     loaded: false,
     labels: [],
     coords: [pointDataItem],
-    TrackingUniqueIdentifier: UIDREFContentItem.UID,
-    TrackingIdentifier: TrackingIdentifierContentItem.TextValue,
+    TrackingUniqueIdentifier: UIDREFContentItem?.UID ?? utils.guid(),
+    TrackingIdentifier:
+      TrackingIdentifierContentItem?.TextValue ?? conceptNameItem?.CodeMeaning ?? 'SR Measurement',
     graphicCode,
     is3DMeasurement,
     pointsLength,
@@ -546,15 +648,20 @@ function _processTID1410Measurement(mergedContentSequence) {
     }
   });
 
-  const findingSites = mergedContentSequence.filter(
-    item =>
-      item.ConceptNameCodeSequence.CodingSchemeDesignator === CodingSchemeDesignators.SCT &&
-      item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.FindingSiteSCT
-  );
+  const findingSites = mergedContentSequence.filter(item => {
+    const c = _firstConcept(item);
+    return (
+      c?.CodingSchemeDesignator === CodingSchemeDesignators.SCT &&
+      c?.CodeValue === CodeNameCodeSequenceValues.FindingSiteSCT
+    );
+  });
   if (findingSites.length) {
     measurement.labels.push({
       label: CodeNameCodeSequenceValues.FindingSiteSCT,
-      value: findingSites[0].ConceptCodeSequence.CodeMeaning,
+      value: (Array.isArray(findingSites[0]?.ConceptCodeSequence)
+        ? findingSites[0]?.ConceptCodeSequence?.[0]
+        : findingSites[0]?.ConceptCodeSequence
+      )?.CodeMeaning,
     });
   }
 
@@ -572,31 +679,35 @@ function _processNonGeometricallyDefinedMeasurement(mergedContentSequence) {
   const UIDREFContentItem = mergedContentSequence.find(group => group.ValueType === 'UIDREF');
 
   const TrackingIdentifierContentItem = mergedContentSequence.find(
-    item => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.TrackingIdentifier
+    item => _firstConcept(item)?.CodeValue === CodeNameCodeSequenceValues.TrackingIdentifier
   );
 
   const finding = mergedContentSequence.find(
-    item => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.Finding
+    item => _firstConcept(item)?.CodeValue === CodeNameCodeSequenceValues.Finding
   );
 
-  const findingSites = mergedContentSequence.filter(
-    item =>
-      item.ConceptNameCodeSequence.CodingSchemeDesignator === CodingSchemeDesignators.SRT &&
-      item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.FindingSite
-  );
+  const findingSites = mergedContentSequence.filter(item => {
+    const c = _firstConcept(item);
+    return (
+      c?.CodingSchemeDesignator === CodingSchemeDesignators.SRT &&
+      c?.CodeValue === CodeNameCodeSequenceValues.FindingSite
+    );
+  });
 
-  const commentSites = mergedContentSequence.filter(
-    item =>
-      item.ConceptNameCodeSequence.CodingSchemeDesignator === COMMENT_CODE.schemeDesignator &&
-      item.ConceptNameCodeSequence.CodeValue === COMMENT_CODE.value
-  );
+  const commentSites = mergedContentSequence.filter(item => {
+    const c = _firstConcept(item);
+    return (
+      c?.CodingSchemeDesignator === COMMENT_CODE.schemeDesignator &&
+      c?.CodeValue === COMMENT_CODE.value
+    );
+  });
 
   const measurement = {
     loaded: false,
     labels: [],
     coords: [],
-    TrackingUniqueIdentifier: UIDREFContentItem.UID,
-    TrackingIdentifier: TrackingIdentifierContentItem.TextValue,
+    TrackingUniqueIdentifier: UIDREFContentItem?.UID ?? utils.guid(),
+    TrackingIdentifier: TrackingIdentifierContentItem?.TextValue ?? 'SR Measurement',
   };
 
   if (commentSites) {
@@ -607,34 +718,40 @@ function _processNonGeometricallyDefinedMeasurement(mergedContentSequence) {
     }
   }
 
-  if (
-    finding &&
-    CodingSchemeDesignators.CornerstoneCodeSchemes.includes(
-      finding.ConceptCodeSequence.CodingSchemeDesignator
-    ) &&
-    finding.ConceptCodeSequence.CodeValue === Cornerstone3DCodeScheme.codeValues.CORNERSTONEFREETEXT
-  ) {
-    measurement.labels.push({
-      label: Cornerstone3DCodeScheme.codeValues.CORNERSTONEFREETEXT,
-      value: finding.ConceptCodeSequence.CodeMeaning,
-    });
+  if (finding) {
+    const cc = Array.isArray(finding.ConceptCodeSequence)
+      ? finding.ConceptCodeSequence[0]
+      : finding.ConceptCodeSequence;
+    if (
+      CodingSchemeDesignators.CornerstoneCodeSchemes.includes(cc?.CodingSchemeDesignator) &&
+      cc?.CodeValue === Cornerstone3DCodeScheme.codeValues.CORNERSTONEFREETEXT
+    ) {
+      measurement.labels.push({
+        label: Cornerstone3DCodeScheme.codeValues.CORNERSTONEFREETEXT,
+        value: cc?.CodeMeaning,
+      });
+    }
   }
 
   // TODO -> Eventually hopefully support SNOMED or some proper code library, just free text for now.
   if (findingSites.length) {
-    const cornerstoneFreeTextFindingSite = findingSites.find(
-      FindingSite =>
-        CodingSchemeDesignators.CornerstoneCodeSchemes.includes(
-          FindingSite.ConceptCodeSequence.CodingSchemeDesignator
-        ) &&
-        FindingSite.ConceptCodeSequence.CodeValue ===
-          Cornerstone3DCodeScheme.codeValues.CORNERSTONEFREETEXT
-    );
+    const cornerstoneFreeTextFindingSite = findingSites.find(FindingSite => {
+      const cc = Array.isArray(FindingSite.ConceptCodeSequence)
+        ? FindingSite.ConceptCodeSequence[0]
+        : FindingSite.ConceptCodeSequence;
+      return (
+        CodingSchemeDesignators.CornerstoneCodeSchemes.includes(cc?.CodingSchemeDesignator) &&
+        cc?.CodeValue === Cornerstone3DCodeScheme.codeValues.CORNERSTONEFREETEXT
+      );
+    });
 
     if (cornerstoneFreeTextFindingSite) {
+      const cc = Array.isArray(cornerstoneFreeTextFindingSite.ConceptCodeSequence)
+        ? cornerstoneFreeTextFindingSite.ConceptCodeSequence[0]
+        : cornerstoneFreeTextFindingSite.ConceptCodeSequence;
       measurement.labels.push({
         label: Cornerstone3DCodeScheme.codeValues.CORNERSTONEFREETEXT,
-        value: cornerstoneFreeTextFindingSite.ConceptCodeSequence.CodeMeaning,
+        value: cc?.CodeMeaning,
       });
     }
   }
@@ -642,14 +759,14 @@ function _processNonGeometricallyDefinedMeasurement(mergedContentSequence) {
   NUMContentItems.forEach(item => {
     const { ConceptNameCodeSequence, ContentSequence, MeasuredValueSequence } = item;
 
-    const { ValueType } = ContentSequence;
-    if (!ValueType === 'SCOORD') {
+    const ValueType = ContentSequence?.ValueType;
+    if (ValueType && ValueType !== 'SCOORD' && ValueType !== 'SCOORD3D') {
       console.warn(`Graphic ${ValueType} not currently supported, skipping annotation.`);
       return;
     }
 
-    const coords = _getCoordsFromSCOORDOrSCOORD3D(ContentSequence);
-    if (coords) {
+    const coords = _getCoordsFromSCOORDOrSCOORD3D(ContentSequence || {});
+    if (coords?.GraphicData?.length) {
       measurement.coords.push(coords);
     }
 
@@ -668,9 +785,20 @@ function _processNonGeometricallyDefinedMeasurement(mergedContentSequence) {
  * @param {object} graphicItem - The graphic item containing the coordinates.
  * @returns {object} - The extracted coordinates.
  */
-const _getCoordsFromSCOORDOrSCOORD3D = graphicItem => {
+type GraphicItem = {
+  ValueType: string;
+  GraphicType: string;
+  GraphicData: number[];
+  ContentSequence?: {
+    ReferencedSOPSequence?: { ReferencedSOPInstanceUID: string; ReferencedFrameNumber?: number };
+    ReferencedFrameOfReferenceSequence?: string;
+  };
+  ReferencedFrameOfReferenceUID?: string;
+};
+
+const _getCoordsFromSCOORDOrSCOORD3D = (graphicItem: GraphicItem) => {
   const { ValueType, GraphicType, GraphicData } = graphicItem;
-  const coords = { ValueType, GraphicType, GraphicData };
+  const coords: Coord = { ValueType, GraphicType, GraphicData };
   coords.ReferencedSOPSequence = graphicItem.ContentSequence?.ReferencedSOPSequence;
   coords.ReferencedFrameOfReferenceSequence =
     graphicItem.ReferencedFrameOfReferenceUID ||
@@ -688,13 +816,23 @@ const _getCoordsFromSCOORDOrSCOORD3D = graphicItem => {
  *                    Example: { label: 'Long Axis', value: '31.00 mm' }
  */
 function _getLabelFromMeasuredValueSequence(ConceptNameCodeSequence, MeasuredValueSequence) {
-  const { CodeMeaning } = ConceptNameCodeSequence;
-  const { NumericValue, MeasurementUnitsCodeSequence } = MeasuredValueSequence;
-  const { CodeValue } = MeasurementUnitsCodeSequence;
-  const formatedNumericValue = NumericValue ? Number(NumericValue).toFixed(2) : '';
+  const cnc = Array.isArray(ConceptNameCodeSequence)
+    ? ConceptNameCodeSequence[0]
+    : ConceptNameCodeSequence;
+  const mvs = Array.isArray(MeasuredValueSequence)
+    ? MeasuredValueSequence[0]
+    : MeasuredValueSequence;
+
+  const { CodeMeaning } = cnc || {};
+  const { NumericValue, MeasurementUnitsCodeSequence } = mvs || {};
+  const mucs = Array.isArray(MeasurementUnitsCodeSequence)
+    ? MeasurementUnitsCodeSequence[0]
+    : MeasurementUnitsCodeSequence;
+  const { CodeValue } = mucs || {};
+  const formatedNumericValue = NumericValue !== undefined ? Number(NumericValue).toFixed(2) : '';
   return {
-    label: CodeMeaning,
-    value: `${formatedNumericValue} ${CodeValue}`,
+    label: CodeMeaning || '',
+    value: CodeValue ? `${formatedNumericValue} ${CodeValue}` : formatedNumericValue,
   }; // E.g. Long Axis: 31.0 mm
 }
 
@@ -706,7 +844,7 @@ function _getLabelFromMeasuredValueSequence(ConceptNameCodeSequence, MeasuredVal
  */
 function _getReferencedImagesList(ImagingMeasurementReportContentSequence) {
   const ImageLibrary = ImagingMeasurementReportContentSequence.find(
-    item => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.ImageLibrary
+    item => _firstConcept(item)?.CodeValue === CodeNameCodeSequenceValues.ImageLibrary
   );
 
   if (!ImageLibrary) {
@@ -714,7 +852,7 @@ function _getReferencedImagesList(ImagingMeasurementReportContentSequence) {
   }
 
   const ImageLibraryGroup = _getSequenceAsArray(ImageLibrary.ContentSequence).find(
-    item => item.ConceptNameCodeSequence.CodeValue === CodeNameCodeSequenceValues.ImageLibraryGroup
+    item => _firstConcept(item)?.CodeValue === CodeNameCodeSequenceValues.ImageLibraryGroup
   );
   if (!ImageLibraryGroup) {
     return [];
