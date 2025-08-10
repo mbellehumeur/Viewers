@@ -240,6 +240,8 @@ function initMPRToolGroup(extensionManager, toolGroupService, commandsManager) {
           displayOnePointAsCrosshairs: true,
         },
       },
+      // Add SRSCOORD3DPoint tool from SRToolNames
+      { toolName: SRToolNames.SRSCOORD3DPoint },
     ],
     disabled: [
       {

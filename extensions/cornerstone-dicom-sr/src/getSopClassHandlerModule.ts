@@ -335,12 +335,19 @@ function _checkIfCanAddMeasurementsToDisplaySet(
       _measurementBelongsToDisplaySet({ measurement, displaySet: newDisplaySet })
     ) {
       try {
+        // For SCOORD3D POINT, only log the single point, not a slice of 6
+        const isScoord3dPoint =
+          measurement.coords?.[0]?.ValueType === 'SCOORD3D' &&
+          measurement.coords?.[0]?.GraphicType === 'POINT';
+        const points = isScoord3dPoint
+          ? [measurement.coords?.[0]?.GraphicData]
+          : measurement.coords?.[0]?.GraphicData?.slice?.(0, 6);
         console.debug('[SR] Will add 3D SR annotation to displaySet', {
           displaySetInstanceUID: newDisplaySet.displaySetInstanceUID,
           FrameOfReferenceUID: newDisplaySet.FrameOfReferenceUID,
           measurementFoR: measurement.coords?.[0]?.ReferencedFrameOfReferenceSequence,
           graphicType: measurement.coords?.[0]?.GraphicType,
-          points: measurement.coords?.[0]?.GraphicData?.slice?.(0, 6),
+          points,
         });
       } catch (_e) {
         /* ignore logging errors */
@@ -591,6 +598,9 @@ function _processMeasurement(mergedContentSequence) {
  * TID 1410 style measurements have a SCOORD or SCOORD3D at the top level,
  * and non-geometric representations where each NUM has "INFERRED FROM" SCOORD/SCOORD3D.
  *
+ * Special customization: SCOORD3D with GraphicType "POINT" is treated as a single point
+ * measurement regardless of coordinate count, and is assigned measurementType "point".
+ *
  * @param mergedContentSequence - The merged content sequence containing the measurements.
  * @returns The measurement object containing the loaded status, labels, coordinates, tracking unique identifier, and tracking identifier.
  */
@@ -624,7 +634,21 @@ function _processTID1410Measurement(mergedContentSequence) {
   const pointDataItem = _getCoordsFromSCOORDOrSCOORD3D(graphicItem);
   const is3DMeasurement = pointDataItem.ValueType === 'SCOORD3D';
   const pointLength = is3DMeasurement ? 3 : 2;
-  const pointsLength = (pointDataItem.GraphicData?.length || 0) / pointLength;
+
+  // Special handling for SCOORD3D POINT measurements - should always be 1 point regardless of coordinate count
+  let pointsLength;
+  if (requiresSpecialScoord3dPointHandling(pointDataItem)) {
+    pointsLength = 1;
+    console.debug('[SR] Special SCOORD3D POINT handling applied', {
+      conceptName: conceptNameItem?.CodeMeaning,
+      graphicType: pointDataItem.GraphicType,
+      valueType: pointDataItem.ValueType,
+      coordinateCount: pointDataItem.GraphicData?.length,
+      pointsLength,
+    });
+  } else {
+    pointsLength = (pointDataItem.GraphicData?.length || 0) / pointLength;
+  }
 
   const measurement = {
     loaded: false,
@@ -637,6 +661,8 @@ function _processTID1410Measurement(mergedContentSequence) {
     is3DMeasurement,
     pointsLength,
     graphicType: pointDataItem.GraphicType,
+    // Special handling for SCOORD3D POINT measurements - ensure they are treated as point type
+    measurementType: requiresSpecialScoord3dPointHandling(pointDataItem) ? 'point' : undefined,
   };
 
   NUMContentItems.forEach(item => {
@@ -907,6 +933,18 @@ function isTextPosition(group) {
     concept.CodeValue === TEXT_ANNOTATION_POSITION.value &&
     concept.CodingSchemeDesignator === TEXT_ANNOTATION_POSITION.schemeDesignator
   );
+}
+
+/**
+ * Checks if the SR measurement requires special handling for SCOORD3D POINT format.
+ * This handles cases where SCOORD3D with GraphicType "POINT" should be treated as
+ * a single point measurement regardless of coordinate count.
+ *
+ * @param graphicItem - The graphic item containing ValueType and GraphicType
+ * @returns True if this is a SCOORD3D POINT that needs special handling
+ */
+function requiresSpecialScoord3dPointHandling(graphicItem) {
+  return graphicItem.ValueType === 'SCOORD3D' && graphicItem.GraphicType === 'POINT';
 }
 
 export default getSopClassHandlerModule;

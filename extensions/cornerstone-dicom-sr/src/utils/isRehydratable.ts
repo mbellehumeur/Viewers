@@ -26,11 +26,35 @@ export default function isRehydratable(displaySet, mappings) {
     if (!measurement) {
       continue;
     }
-    const { TrackingIdentifier = '', graphicType, graphicCode, pointsLength } = measurement;
+
+    const {
+      TrackingIdentifier = '',
+      graphicType,
+      graphicCode,
+      pointsLength,
+      is3DMeasurement,
+      coords,
+    } = measurement;
+
+    // For SCOORD3D measurements, check if ArrowAnnotate is available
+    if (is3DMeasurement || coords?.[0]?.ValueType === 'SCOORD3D') {
+      // For SCOORD3D POINT measurements, ensure we're treating it as a single measurement
+      if (coords?.[0]?.GraphicType === 'POINT' && pointsLength === 1) {
+        if (mappingDefinitions.has('ArrowAnnotate')) {
+          console.log(
+            'SCOORD3D POINT measurement can be rehydrated as ArrowAnnotate',
+            TrackingIdentifier
+          );
+          return true;
+        }
+      }
+    }
+
     if (!TrackingIdentifier && !graphicType) {
-      console.warn('No tracking identifier  or graphicType for measurement ', measurement);
+      console.warn('No tracking identifier or graphicType for measurement ', measurement);
       continue;
     }
+
     const adapter = MeasurementReport.getAdapterForTrackingIdentifier(TrackingIdentifier);
     const adapters = MeasurementReport.getAdaptersForTypes(graphicCode, graphicType, pointsLength);
     const hydratable =
