@@ -91,33 +91,6 @@ export default function hydrateStructuredReport(
   // Mapping of legacy datasets is now directly handled by adapters module
   const datasetToUse = instance;
 
-  console.debug('[SR Hydration] Starting generateToolState with:', {
-    displaySetInstanceUID: displaySet.displaySetInstanceUID,
-    SOPClassHandlerId: displaySet.SOPClassHandlerId,
-    numMeasurements: displaySet.measurements?.length || 0,
-    isHydrated: displaySet.isHydrated,
-    datasetToUse: !!datasetToUse,
-    sopInstanceUIDToImageIdKeys: Object.keys(sopInstanceUIDToImageId || {}),
-  });
-
-  // // Log measurements to debug ContentSequence issue
-  // if (displaySet.measurements) {
-  //   displaySet.measurements.forEach((measurement, index) => {
-  //     console.debug(`[SR Hydration] Measurement ${index + 1}:`, {
-  //       TrackingIdentifier: measurement.TrackingIdentifier,
-  //       TrackingUniqueIdentifier: measurement.TrackingUniqueIdentifier,
-  //       measurementType: measurement.measurementType,
-  //       is3DMeasurement: measurement.is3DMeasurement,
-  //       coordsLength: measurement.coords?.length,
-  //       graphicType: measurement.coords?.[0]?.GraphicType,
-  //       valueType: measurement.coords?.[0]?.ValueType,
-  //       hasContentSequence: Object.prototype.hasOwnProperty.call(measurement, 'ContentSequence'),
-  //       contentSequenceValue: measurement.ContentSequence,
-  //       measurementKeys: Object.keys(measurement),
-  //     });
-  //   });
-  // }
-
   // Use CS3D adapters to generate toolState.
   let storedMeasurementByAnnotationType;
   try {
@@ -130,10 +103,6 @@ export default function hydrateStructuredReport(
       sopInstanceUIDToImageId,
       metaData
     );
-    // console.debug('[SR Hydration] Successfully generated tool state:', {
-    //   annotationTypes: Object.keys(storedMeasurementByAnnotationType || {}),
-    //   totalAnnotations: Object.values(storedMeasurementByAnnotationType || {}).flat().length,
-    // });
   } catch (error) {
     console.error('[SR Hydration] Error in generateToolState:', {
       error: error.message,

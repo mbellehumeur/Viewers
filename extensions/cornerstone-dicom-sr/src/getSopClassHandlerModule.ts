@@ -288,10 +288,6 @@ function _checkIfCanAddMeasurementsToDisplaySet(
       is3DMeasurement &&
       _measurementBelongsToDisplaySet({ measurement, displaySet: newDisplaySet })
     ) {
-      const referencedSOPSequence = measurement.coords[0].ReferencedSOPSequence;
-
-      //measurement.coords[0].ReferencedFrameOfReferenceSequence = newDisplaySet.FrameOfReferenceUID;
-
       measurement.loaded = true;
       measurement.displaySetInstanceUID = newDisplaySet.displaySetInstanceUID;
       addSRAnnotation(measurement, srDisplaySet);
@@ -313,8 +309,6 @@ function _checkIfCanAddMeasurementsToDisplaySet(
       imageId &&
       _measurementReferencesSOPInstanceUID(measurement, ReferencedSOPInstanceUID, frame)
     ) {
-      addSRAnnotation(measurement, srDisplaySet);
-
       // Update measurement properties
       measurement.loaded = true;
       measurement.imageId = imageId;
