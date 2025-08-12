@@ -170,6 +170,7 @@ const toolNames = {
   LabelmapSlicePropagation: LabelmapSlicePropagationTool.toolName,
   MarkerLabelmap: MarkerLabelmapTool.toolName,
   RegionSegmentPlus: RegionSegmentPlusTool.toolName,
+  MicronToolHover: MicronToolHover.toolName,
 };
 
 export { toolNames };

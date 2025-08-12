@@ -636,6 +636,25 @@ const toolbarButtons: Button[] = [
     },
   },
   {
+    id: 'MicronHover',
+    uiType: 'ohif.toolButton',
+    props: {
+      type: 'tool',
+      icon: 'tool-probe',
+      label: 'MicronHover',
+      commands: {
+        commandName: 'setToolActiveToolbar',
+        commandOptions: {
+          toolGroupIds: ['mpr'],
+        },
+      },
+      evaluate: {
+        name: 'evaluate.cornerstoneTool',
+        disabledText: 'Select an MPR viewport to enable this tool',
+      },
+    },
+  },
+  {
     id: 'Crosshairs',
     uiType: 'ohif.toolButton',
     props: {

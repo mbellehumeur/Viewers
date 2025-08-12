@@ -1,5 +1,7 @@
 import { toolNames as SRToolNames } from '@ohif/extension-cornerstone-dicom-sr';
 
+import { MicronToolHover } from '@cornerstonejs/tools';
+
 const colours = {
   'viewport-0': 'rgb(200, 0, 0)',
   'viewport-1': 'rgb(200, 200, 0)',
@@ -42,6 +44,7 @@ function initDefaultToolGroup(extensionManager, toolGroupService, commandsManage
       {
         toolName: SRToolNames.SRSCOORD3DPoint,
       },
+      { toolName: MicronToolHover.toolName },
       { toolName: toolNames.Length },
       {
         toolName: toolNames.ArrowAnnotate,
@@ -165,6 +168,7 @@ function initSRToolGroup(extensionManager, toolGroupService) {
       {
         toolName: SRToolNames.DICOMSRDisplay,
       },
+      { toolName: MicronToolHover.toolName },
     ],
     // disabled
   };
@@ -189,6 +193,7 @@ function initMPRToolGroup(extensionManager, toolGroupService, commandsManager) {
         toolName: toolNames.WindowLevel,
         bindings: [{ mouseButton: Enums.MouseBindings.Primary }],
       },
+      { toolName: MicronToolHover.toolName },
       {
         toolName: toolNames.Pan,
         bindings: [{ mouseButton: Enums.MouseBindings.Auxiliary }],

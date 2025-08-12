@@ -100,6 +100,7 @@ function modeFactory({ modeConfiguration }) {
         'Capture',
         'Layout',
         'Crosshairs',
+        'MicronHover',
         'MoreTools',
       ]);
 
