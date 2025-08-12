@@ -31,8 +31,14 @@ export default function onModeEnter({ servicesManager }) {
           }
 
           // Enable the tool for passive interaction (can see existing annotations)
-          toolGroup.setToolEnabled('ArrowAnnotate');
-          console.log(`Enabled ArrowAnnotate tool in tool group: ${toolGroupId}`);
+          //        toolGroup.setToolEnabled('ArrowAnnotate');
+          //       console.log(`Enabled ArrowAnnotate tool in tool group: ${toolGroupId}`);
+
+          if (!toolGroup.hasTool('SRCOORD3DPoint')) {
+            toolGroup.addTool('SRCOORD3DPoint');
+            console.log(`Added SRCOORD3DPoint tool to tool group: ${toolGroupId}`);
+            toolGroup.setToolEnabled('SRCOORD3DPoint');
+          }
         } catch (error) {
           console.warn(
             'Could not add/enable ArrowAnnotate tool to tool group:',

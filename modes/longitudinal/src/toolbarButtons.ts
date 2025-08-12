@@ -704,6 +704,17 @@ const toolbarButtons: Button[] = [
   //     evaluate: 'evaluate.action',
   //   },
   // },
+  {
+    id: 'SRSCOORD3DPoint',
+    uiType: 'ohif.toolButton',
+    props: {
+      icon: 'tool-point', // Use a suitable icon name or update as needed
+      label: '3D Point',
+      tooltip: 'SCOORD3D Point Tool',
+      commands: setToolActiveToolbar,
+      evaluate: 'evaluate.cornerstoneTool',
+    },
+  },
 ];
 
 export default toolbarButtons;

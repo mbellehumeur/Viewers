@@ -7,25 +7,18 @@ import toolNames from '../tools/toolNames';
 
 const { MeasurementReport } = adaptersSR.Cornerstone3D;
 
-export default function addSRAnnotation(measurement, imageId, frameNumber) {
-  let toolName = toolNames.DICOMSRDisplay;
+export default function addSRAnnotation(measurement, srDisplaySet) {
+  let toolName = toolNames.DICOMSRDisplay; //  this would need to handle the format as well
+  toolName = toolNames.SRSCOORD3DPoint;
   const renderableData = measurement.coords.reduce((acc, coordProps) => {
     acc[coordProps.GraphicType] = acc[coordProps.GraphicType] || [];
-    acc[coordProps.GraphicType].push(getRenderableData({ ...coordProps, imageId }));
+    acc[coordProps.GraphicType].push(getRenderableData({ ...coordProps }));
     return acc;
   }, {});
 
   const { TrackingUniqueIdentifier } = measurement;
   const { ValueType: valueType, GraphicType: graphicType } = measurement.coords[0];
   const graphicTypePoints = renderableData[graphicType];
-
-  /** TODO: Read the tool name from the DICOM SR identification type in the future. */
-  let frameOfReferenceUID = null;
-
-  if (imageId) {
-    const imagePlaneModule = metaData.get('imagePlaneModule', imageId);
-    frameOfReferenceUID = imagePlaneModule?.frameOfReferenceUID;
-  }
 
   if (valueType === 'SCOORD3D') {
     const adapter = MeasurementReport.getAdapterForTrackingIdentifier(
@@ -37,38 +30,19 @@ export default function addSRAnnotation(measurement, imageId, frameNumber) {
     } else if (!adapter) {
       toolName = toolNames.SRArrowAnnotate;
     }
-
-    // get the ReferencedFrameOfReferenceUID from the measurement
-    frameOfReferenceUID = measurement.coords[0].ReferencedFrameOfReferenceSequence;
-
-    // Fallback: if no frame of reference from measurement, try to get from imageId
-    if (!frameOfReferenceUID && imageId) {
-      const imagePlaneModule = metaData.get('imagePlaneModule', imageId);
-      frameOfReferenceUID = imagePlaneModule?.frameOfReferenceUID;
-      console.log(
-        'SCOORD3D: Using fallback frameOfReferenceUID from imageId:',
-        frameOfReferenceUID
-      );
-    }
-
-    console.log('SCOORD3D measurement frameOfReferenceUID:', frameOfReferenceUID);
   }
 
   // Create annotation directly without using generateToolState for SCOORD3D
-  if (valueType === 'SCOORD3D' && toolName === toolNames.SRArrowAnnotate) {
+  if (
+    (valueType === 'SCOORD3D' && toolName === toolNames.SRSCOORD3DPoint) ||
+    toolName === toolNames.SRArrowAnnotate
+  ) {
     const coord = measurement.coords[0];
     const { GraphicData } = coord;
 
     // For SCOORD3D POINT, create arrow annotation data
     if (graphicType === 'POINT' && GraphicData?.length >= 3) {
       const [x, y, z] = GraphicData;
-
-      // Ensure we have a valid frame of reference for 3D coordinates
-      if (!frameOfReferenceUID) {
-        console.warn('SCOORD3D measurement missing frameOfReferenceUID, using default');
-        // Try to use a default frame of reference if available
-        frameOfReferenceUID = 'DEFAULT_FRAME_OF_REFERENCE';
-      }
 
       const SRAnnotation: Types.Annotation = {
         annotationUID: TrackingUniqueIdentifier,
@@ -77,7 +51,7 @@ export default function addSRAnnotation(measurement, imageId, frameNumber) {
         invalidated: false,
         metadata: {
           toolName,
-          FrameOfReferenceUID: frameOfReferenceUID,
+          FrameOfReferenceUID: measurement.FrameOfReferenceUID,
           // For SCOORD3D measurements, don't set referencedImageId since they're 3D world coordinates
           // referencedImageId: imageId, // This causes "Unable to apply reference viewable" warnings
         },
@@ -89,16 +63,16 @@ export default function addSRAnnotation(measurement, imageId, frameNumber) {
               [x + 10, y, z + 10], // End point (arrow direction)
             ],
             activeHandleIndex: null,
-            textBox: {
-              hasMoved: false,
-              worldPosition: [x + 5, y + 5, z + 5],
-              worldBoundingBox: {
-                topLeft: [x - 5, y - 5, z - 5],
-                topRight: [x + 15, y - 5, z - 5],
-                bottomLeft: [x - 5, y + 15, z - 5],
-                bottomRight: [x + 15, y + 15, z - 5],
-              },
-            },
+            // textBox: {
+            //   hasMoved: false,
+            //   worldPosition: [x + 5, y + 5, z + 5],
+            //   worldBoundingBox: {
+            //     topLeft: [x - 5, y - 5, z - 5],
+            //     topRight: [x + 15, y - 5, z - 5],
+            //     bottomLeft: [x - 5, y + 15, z - 5],
+            //     bottomRight: [x + 15, y + 15, z - 5],
+            //   },
+            // },
           },
           label: measurement.TrackingIdentifier || 'SR Annotation',
           labelText: measurement.labels?.map(l => `${l.label}: ${l.value}`).join('\n') || '',
@@ -112,7 +86,7 @@ export default function addSRAnnotation(measurement, imageId, frameNumber) {
         },
       };
 
-      annotation.state.addAnnotation(SRAnnotation, frameOfReferenceUID);
+      annotation.state.addAnnotation(SRAnnotation, measurement.FrameOfReferenceUID);
       return;
     }
   }
@@ -148,4 +122,12 @@ export default function addSRAnnotation(measurement, imageId, frameNumber) {
    * was not triggering annotation_added events.
    */
   annotation.state.addAnnotation(SRAnnotation, frameOfReferenceUID);
+  // In addSRAnnotation function (utils/addSRAnnotation.ts)
+  console.debug('DEBUG addSRAnnotation: Adding annotation', {
+    tool: measurement.tool,
+    TrackingUniqueIdentifier: measurement.TrackingUniqueIdentifier,
+    is3DMeasurement: measurement.is3DMeasurement,
+    points: measurement.points,
+    coords: measurement.coords,
+  });
 }

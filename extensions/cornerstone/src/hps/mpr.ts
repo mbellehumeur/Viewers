@@ -155,6 +155,7 @@ export const mpr: Types.HangingProtocol.Protocol = {
         {
           viewportOptions: {
             viewportId: 'mpr-sr',
+            toolGroupId: 'mpr',
             viewportType: 'dicom-sr',
             allowUnmatchedView: true,
           },

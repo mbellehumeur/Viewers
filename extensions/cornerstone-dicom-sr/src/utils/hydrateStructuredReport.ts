@@ -91,16 +91,59 @@ export default function hydrateStructuredReport(
   // Mapping of legacy datasets is now directly handled by adapters module
   const datasetToUse = instance;
 
+  console.debug('[SR Hydration] Starting generateToolState with:', {
+    displaySetInstanceUID: displaySet.displaySetInstanceUID,
+    SOPClassHandlerId: displaySet.SOPClassHandlerId,
+    numMeasurements: displaySet.measurements?.length || 0,
+    isHydrated: displaySet.isHydrated,
+    datasetToUse: !!datasetToUse,
+    sopInstanceUIDToImageIdKeys: Object.keys(sopInstanceUIDToImageId || {}),
+  });
+
+  // // Log measurements to debug ContentSequence issue
+  // if (displaySet.measurements) {
+  //   displaySet.measurements.forEach((measurement, index) => {
+  //     console.debug(`[SR Hydration] Measurement ${index + 1}:`, {
+  //       TrackingIdentifier: measurement.TrackingIdentifier,
+  //       TrackingUniqueIdentifier: measurement.TrackingUniqueIdentifier,
+  //       measurementType: measurement.measurementType,
+  //       is3DMeasurement: measurement.is3DMeasurement,
+  //       coordsLength: measurement.coords?.length,
+  //       graphicType: measurement.coords?.[0]?.GraphicType,
+  //       valueType: measurement.coords?.[0]?.ValueType,
+  //       hasContentSequence: Object.prototype.hasOwnProperty.call(measurement, 'ContentSequence'),
+  //       contentSequenceValue: measurement.ContentSequence,
+  //       measurementKeys: Object.keys(measurement),
+  //     });
+  //   });
+  // }
+
   // Use CS3D adapters to generate toolState.
-  let storedMeasurementByAnnotationType = MeasurementReport.generateToolState(
-    datasetToUse,
-    // NOTE: we need to pass in the imageIds to dcmjs since the we use them
-    // for the imageToWorld transformation. The following assumes that the order
-    // that measurements were added to the display set are the same order as
-    // the measurementGroups in the instance.
-    sopInstanceUIDToImageId,
-    metaData
-  );
+  let storedMeasurementByAnnotationType;
+  try {
+    storedMeasurementByAnnotationType = MeasurementReport.generateToolState(
+      datasetToUse,
+      // NOTE: we need to pass in the imageIds to dcmjs since the we use them
+      // for the imageToWorld transformation. The following assumes that the order
+      // that measurements were added to the display set are the same order as
+      // the measurementGroups in the instance.
+      sopInstanceUIDToImageId,
+      metaData
+    );
+    // console.debug('[SR Hydration] Successfully generated tool state:', {
+    //   annotationTypes: Object.keys(storedMeasurementByAnnotationType || {}),
+    //   totalAnnotations: Object.values(storedMeasurementByAnnotationType || {}).flat().length,
+    // });
+  } catch (error) {
+    console.error('[SR Hydration] Error in generateToolState:', {
+      error: error.message,
+      stack: error.stack,
+      datasetToUse,
+      displaySetMeasurements: displaySet.measurements,
+      sopInstanceUIDToImageId,
+    });
+    throw error;
+  }
 
   const onBeforeSRHydration = customizationService.getCustomization('onBeforeSRHydration')?.value;
 
@@ -133,14 +176,13 @@ export default function hydrateStructuredReport(
       // dcmjs and Cornerstone3D has structural defect in supporting multi-frame
       // files, and looking up the imageId from sopInstanceUIDToImageId results
       // in the wrong value.
-      const frameNumber = (toolData.annotation.data && toolData.annotation.data.frameNumber) || 1;
-      const imageId =
-        imageIdsForToolState[toolData.sopInstanceUid][frameNumber] ||
-        sopInstanceUIDToImageId[toolData.sopInstanceUid];
-
-      if (!imageIds.includes(imageId)) {
-        imageIds.push(imageId);
-      }
+      // const frameNumber = (toolData.annotation.data && toolData.annotation.data.frameNumber) || 1;
+      // const imageId =
+      //   imageIdsForToolState[toolData.sopInstanceUid][frameNumber] ||
+      //   sopInstanceUIDToImageId[toolData.sopInstanceUid];
+      // if (!imageIds.includes(imageId)) {
+      //   imageIds.push(imageId);
+      // }
     });
   });
 
@@ -316,10 +358,10 @@ function getReferenceData3D(toolData, servicesManager: Types.ServicesManager) {
  */
 function chooseCameraView(_ds, points) {
   const selectedPoints = choosePoints(points);
-  const cameraFocalPoint = <Point3>centerOf(selectedPoints);
+  const cameraFocalPoint = centerOf(selectedPoints) as Point3;
   // These are sufficient to be null for now and can be set on first view
-  let viewPlaneNormal: Types.Point3 = null;
-  let viewUp: Types.Point3 = null;
+  const viewPlaneNormal: Types.Point3 = null;
+  const viewUp: Types.Point3 = null;
 
   return {
     cameraFocalPoint,

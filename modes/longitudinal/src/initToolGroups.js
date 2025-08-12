@@ -281,7 +281,44 @@ function initMPRToolGroup(extensionManager, toolGroupService, commandsManager) {
     ],
   };
 
-  toolGroupService.createToolGroupAndAddTools('mpr', tools);
+  // Debug logging for MPR tool group
+  console.debug('[MPR ToolGroup] Creating MPR tool group with tools:');
+  console.debug(
+    '[MPR ToolGroup] Active tools:',
+    tools.active.map(t => t.toolName)
+  );
+  console.debug(
+    '[MPR ToolGroup] Passive tools:',
+    tools.passive.map(t => t.toolName)
+  );
+  console.debug(
+    '[MPR ToolGroup] Disabled tools:',
+    tools.disabled.map(t => t.toolName)
+  );
+  console.debug(
+    '[MPR ToolGroup] SRSCOORD3DPoint present in passive:',
+    tools.passive.some(t => t.toolName === SRToolNames.SRSCOORD3DPoint)
+  );
+  console.debug('[MPR ToolGroup] SRToolNames.SRSCOORD3DPoint value:', SRToolNames.SRSCOORD3DPoint);
+
+  try {
+    toolGroupService.createToolGroupAndAddTools('mpr', tools);
+    console.debug('[MPR ToolGroup] Successfully created MPR tool group');
+
+    // Verify the tool group was created
+    const createdToolGroup = toolGroupService.getToolGroup('mpr');
+    if (createdToolGroup) {
+      console.debug('[MPR ToolGroup] Tool group verification successful');
+      console.debug(
+        '[MPR ToolGroup] Available tools in created group:',
+        createdToolGroup.getToolNames?.()
+      );
+    } else {
+      console.error('[MPR ToolGroup] Tool group was not created properly');
+    }
+  } catch (error) {
+    console.error('[MPR ToolGroup] Error creating MPR tool group:', error);
+  }
 }
 function initVolume3DToolGroup(extensionManager, toolGroupService) {
   const utilityModule = extensionManager.getModuleEntry(
