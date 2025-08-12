@@ -63,16 +63,6 @@ export default function addSRAnnotation(measurement, srDisplaySet) {
               [x + 10, y, z + 10], // End point (arrow direction)
             ],
             activeHandleIndex: null,
-            // textBox: {
-            //   hasMoved: false,
-            //   worldPosition: [x + 5, y + 5, z + 5],
-            //   worldBoundingBox: {
-            //     topLeft: [x - 5, y - 5, z - 5],
-            //     topRight: [x + 15, y - 5, z - 5],
-            //     bottomLeft: [x - 5, y + 15, z - 5],
-            //     bottomRight: [x + 15, y + 15, z - 5],
-            //   },
-            // },
           },
           label: measurement.TrackingIdentifier || 'SR Annotation',
           labelText: measurement.labels?.map(l => `${l.label}: ${l.value}`).join('\n') || '',

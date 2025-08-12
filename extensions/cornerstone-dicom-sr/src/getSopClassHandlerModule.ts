@@ -508,7 +508,6 @@ function _getMeasurements(ImagingMeasurementReportContentSequence) {
   );
 
   if (!ImagingMeasurements) {
-    console.log('DEBUG _getMeasurements: No ImagingMeasurements found, returning empty array');
     return [];
   }
 

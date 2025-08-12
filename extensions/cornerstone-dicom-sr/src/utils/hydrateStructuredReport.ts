@@ -140,19 +140,19 @@ export default function hydrateStructuredReport(
   Object.keys(hydratableMeasurementsInSR).forEach(annotationType => {
     const toolDataForAnnotationType = hydratableMeasurementsInSR[annotationType];
 
-    toolDataForAnnotationType.forEach(toolData => {
-      // Add the measurement to toolState
-      // dcmjs and Cornerstone3D has structural defect in supporting multi-frame
-      // files, and looking up the imageId from sopInstanceUIDToImageId results
-      // in the wrong value.
-      // const frameNumber = (toolData.annotation.data && toolData.annotation.data.frameNumber) || 1;
-      // const imageId =
-      //   imageIdsForToolState[toolData.sopInstanceUid][frameNumber] ||
-      //   sopInstanceUIDToImageId[toolData.sopInstanceUid];
-      // if (!imageIds.includes(imageId)) {
-      //   imageIds.push(imageId);
-      // }
-    });
+    // toolDataForAnnotationType.forEach(toolData => {
+    // Add the measurement to toolState
+    // dcmjs and Cornerstone3D has structural defect in supporting multi-frame
+    // files, and looking up the imageId from sopInstanceUIDToImageId results
+    // in the wrong value.
+    // const frameNumber = (toolData.annotation.data && toolData.annotation.data.frameNumber) || 1;
+    // const imageId =
+    //   imageIdsForToolState[toolData.sopInstanceUid][frameNumber] ||
+    //   sopInstanceUIDToImageId[toolData.sopInstanceUid];
+    // if (!imageIds.includes(imageId)) {
+    //   imageIds.push(imageId);
+    // }
+    //  });
   });
 
   let targetStudyInstanceUID;
