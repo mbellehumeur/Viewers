@@ -41,6 +41,7 @@ import {
   SegmentSelectTool,
   RegionSegmentPlusTool,
   SegmentLabelTool,
+  MicronToolHover,
 } from '@cornerstonejs/tools';
 import { LabelmapSlicePropagationTool, MarkerLabelmapTool } from '@cornerstonejs/ai';
 import * as polySeg from '@cornerstonejs/polymorphic-segmentation';
@@ -93,6 +94,7 @@ export default function initCornerstoneTools(configuration = {}) {
   addTool(PaintFillTool);
   addTool(ReferenceLinesTool);
   addTool(CalibrationLineTool);
+  addTool(MicronToolHover);
   addTool(TrackballRotateTool);
   addTool(ImageOverlayViewerTool);
   addTool(AdvancedMagnifyTool);

@@ -396,8 +396,6 @@ function getSopClassHandlerModule(params: OhifTypes.Extensions.ExtensionParams) 
  * @returns {Array} - Array of measurements if simplified format found, empty array otherwise.
  */
 function _checkForSimplifiedSCOORD3D(contentSequence) {
-  console.log('DEBUG _checkForSimplifiedSCOORD3D: Checking for simplified format', contentSequence);
-
   if (!Array.isArray(contentSequence)) {
     console.log('DEBUG _checkForSimplifiedSCOORD3D: ContentSequence is not an array');
     return [];
@@ -407,8 +405,6 @@ function _checkForSimplifiedSCOORD3D(contentSequence) {
   const scoord3dItems = contentSequence.filter(
     item => item.ValueType === 'SCOORD3D' && item.GraphicType === 'POINT'
   );
-
-  console.log('DEBUG _checkForSimplifiedSCOORD3D: Found SCOORD3D items', scoord3dItems);
 
   if (scoord3dItems.length === 0) {
     return [];
@@ -427,11 +423,6 @@ function _checkForSimplifiedSCOORD3D(contentSequence) {
  */
 function _processSimplifiedSCOORD3D(scoord3dItem) {
   console.debug('DEBUG _processSimplifiedSCOORD3D: Processing item', scoord3dItem);
-  console.debug(
-    'DEBUG _processSimplifiedSCOORD3D: GraphicData type:',
-    typeof scoord3dItem.GraphicData
-  );
-  console.debug('DEBUG _processSimplifiedSCOORD3D: GraphicData value:', scoord3dItem.GraphicData);
 
   try {
     const conceptName =

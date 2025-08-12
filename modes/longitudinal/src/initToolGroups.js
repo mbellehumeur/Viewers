@@ -39,6 +39,9 @@ function initDefaultToolGroup(extensionManager, toolGroupService, commandsManage
       },
     ],
     passive: [
+      {
+        toolName: SRToolNames.SRSCOORD3DPoint,
+      },
       { toolName: toolNames.Length },
       {
         toolName: toolNames.ArrowAnnotate,
@@ -87,9 +90,7 @@ function initDefaultToolGroup(extensionManager, toolGroupService, commandsManage
     enabled: [
       { toolName: toolNames.ImageOverlayViewer },
       { toolName: toolNames.ReferenceLines },
-      {
-        toolName: SRToolNames.SRSCOORD3DPoint,
-      },
+      { toolName: toolNames.MicronToolHover },
     ],
     disabled: [
       {
