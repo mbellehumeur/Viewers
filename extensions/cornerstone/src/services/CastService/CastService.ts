@@ -41,6 +41,8 @@ export default class CastService extends PubSubService {
 
   private _conferenceApproved = false;
   private _conferenceDeclined = false;
+  private _conferenceTitle = '';
+  private _conferenceParticipants: string[] = [];
 
   /** Whether the user approved joining a conference (e.g. cast session). */
   public get conferenceApproved(): boolean {
@@ -56,6 +58,22 @@ export default class CastService extends PubSubService {
   }
   public set conferenceDeclined(value: boolean) {
     this._conferenceDeclined = value;
+  }
+
+  /** Title from the last conference-start event. */
+  public get conferenceTitle(): string {
+    return this._conferenceTitle;
+  }
+
+  /** Participants from the last conference-start event (e.g. for populating a list). */
+  public get conferenceParticipants(): string[] {
+    return [...this._conferenceParticipants];
+  }
+
+  /** Called when a conference-start cast event is received; stores title and participants. */
+  public setConferenceStarted(title: string, participants: string[]): void {
+    this._conferenceTitle = title;
+    this._conferenceParticipants = Array.isArray(participants) ? participants : [];
   }
 
   public castConfig: ReturnType<ExtensionManager['appConfig']['cast']> | ReturnType<ExtensionManager['appConfig']['fhircast']>;
@@ -358,7 +376,14 @@ export default class CastService extends PubSubService {
         ? DicomMetadataStore.getStudy((measurement as { referenceStudyUID: string }).referenceStudyUID)
         : null;
 
-    const castMessage = createAnnotationUpdate(annotation, measurement, studyMeta);
+    const measurementMeta = measurement && typeof measurement === 'object' && 'metadata' in measurement
+      ? (measurement as { metadata?: Record<string, unknown> }).metadata
+      : undefined;
+    const enrichedAnnotation = {
+      ...annotation,
+      metadata: { ...(annotation.metadata as Record<string, unknown> ?? {}), ...(measurementMeta ?? {}) },
+    };
+    const castMessage = createAnnotationUpdate(enrichedAnnotation, measurement, studyMeta);
     const uid = annotation.annotationUID ?? annotation.uid;
     const data = annotation.data as Record<string, unknown> | undefined;
     const label = data?.label ?? data?.text;

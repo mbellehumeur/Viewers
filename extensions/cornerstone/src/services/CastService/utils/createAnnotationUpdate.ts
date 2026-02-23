@@ -19,6 +19,7 @@ export interface MeasurementLike {
   label?: string;
   displayText?: Record<string, unknown>;
   data?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
   points?: unknown[];
   type?: string;
   modifiedTimestamp?: number;
@@ -75,6 +76,7 @@ export default function createAnnotationUpdate(
                   label: measurement.label ?? '',
                   displayText: measurement.displayText ?? {},
                   data: measurement.data ?? {},
+                  metadata: measurement.metadata ?? {},
                   points: measurement.points ?? [],
                   type: measurement.type ?? '',
                   modifiedTimestamp:

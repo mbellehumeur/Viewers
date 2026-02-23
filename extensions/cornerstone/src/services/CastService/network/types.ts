@@ -19,8 +19,8 @@ export interface HubConfig {
   lastPublishedMessageID?: string;
 }
 
-/** Context key used in cast event context arrays (e.g. 'annotation', 'measurement', 'patient', 'study'). */
-export type ContextKey = 'annotation' | 'measurement' | 'patient' | 'study';
+/** Context key used in cast event context arrays (e.g. 'annotation', 'measurement', 'patient', 'study', 'conference'). */
+export type ContextKey = 'annotation' | 'measurement' | 'patient' | 'study' | 'conference';
 
 export interface EventContextItem<T = unknown> {
   key: string;
@@ -66,6 +66,12 @@ export interface PatientContextResource {
 /** Study context resource (uid). */
 export interface StudyContextResource {
   uid?: string;
+}
+
+/** Conference context resource (conference-start event). */
+export interface ConferenceResource {
+  title?: string;
+  participants?: string[];
 }
 
 export interface CastMessage {

@@ -4,6 +4,7 @@ import type {
   CastMessage,
   AnnotationResource,
   MeasurementResource,
+  ConferenceResource,
   PatientContextResource,
   StudyContextResource,
 } from '../network/types';
@@ -58,6 +59,7 @@ export class CastMessageHandler {
       ['annotation-delete', (_msg, ev) => this._handleAnnotationDelete(ev)],
       ['annotation-update', (_msg, ev) => this._handleAnnotationUpdate(ev)],
       ['measurement-update', (_msg, ev) => this._handleMeasurementUpdate(ev)],
+      ['conference-start', (_msg, ev) => this._handleConferenceStart(ev)],
     ]);
   }
 
@@ -91,6 +93,26 @@ export class CastMessageHandler {
 
   private _handleNavigateAway(to: string): void {
     this._commandsManager.runCommand('navigateHistory', { to });
+  }
+
+  private _handleConferenceStart(event: Record<string, unknown>): void {
+    const context = event.context as Array<{ key: string; resource: ConferenceResource }> | undefined;
+    const conference = getContextResource<ConferenceResource>(context, 'conference');
+    if (!conference) return;
+
+    const title = conference.title ?? 'Conference started';
+    const participants = Array.isArray(conference.participants) ? conference.participants : [];
+
+    const castService = this._servicesManager.services?.castService as { setConferenceStarted: (title: string, participants: string[]) => void } | undefined;
+    if (castService?.setConferenceStarted) {
+      castService.setConferenceStarted(title, participants);
+    }
+
+    const uiNotificationService = this._servicesManager.services?.uiNotificationService as { show: (opts: { title?: string; message?: string; type?: string }) => unknown } | undefined;
+    if (uiNotificationService?.show) {
+      const message = participants.length > 0 ? `${title} (${participants.length} participants)` : title;
+      uiNotificationService.show({ title: 'Conference', message, type: 'info' });
+    }
   }
 
   private _handleGetRequest(castMessage: CastMessage & Record<string, unknown>): void {
