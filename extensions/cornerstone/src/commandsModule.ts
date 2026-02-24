@@ -2283,6 +2283,37 @@ function commandsModule({
       viewport.render();
     },
     /**
+     * Rotates the 3D volume viewport camera by an angle (degrees) around the z-axis.
+     * Camera position and viewUp orbit around z; focal point unchanged. Used for spin animation.
+     * Only applies to VOLUME_3D viewports.
+     */
+    rotateViewport3DBy: ({
+      viewportId,
+      angle,
+    }: {
+      viewportId: string;
+      angle: number;
+    }) => {
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      if (!viewport || viewport.type !== CoreEnums.ViewportType.VOLUME_3D) {
+        return;
+      }
+      const camera = viewport.getCamera();
+      const focalPoint = camera.focalPoint as [number, number, number];
+      const position = camera.position as [number, number, number];
+      const viewUp = camera.viewUp as [number, number, number];
+      const zAxis: [number, number, number] = [0, 0, 1];
+      const rotAngle = (angle * Math.PI) / 180;
+      const rotMat = mat4.identity(new Float32Array(16));
+      mat4.rotate(rotMat, rotMat, rotAngle, zAxis);
+      const offset = vec3.sub(vec3.create(), position, focalPoint);
+      const newOffset = vec3.transformMat4(vec3.create(), offset, rotMat);
+      const newPosition = vec3.add(vec3.create(), focalPoint, newOffset) as CoreTypes.Point3;
+      const newViewUp = vec3.transformMat4(vec3.create(), viewUp, rotMat) as CoreTypes.Point3;
+      viewport.setCamera({ position: newPosition, viewUp: newViewUp });
+      viewport.render();
+    },
+    /**
      * Toggles the horizontal flip state of the viewport.
      */
     toggleViewportHorizontalFlip: ({ viewportId }: { viewportId?: string } = {}) => {
@@ -2776,6 +2807,9 @@ function commandsModule({
     setViewport3DViewDirection: {
       commandFn: actions.setViewport3DViewDirection,
     },
+    rotateViewport3DBy: {
+      commandFn: actions.rotateViewport3DBy,
+    },
     setVolumeRenderingQuality: {
       commandFn: actions.setVolumeRenderingQuality,
     },
@@ -2915,6 +2949,7 @@ function commandsModule({
     loadSegmentationDisplaySetsForViewport: actions.loadSegmentationDisplaySetsForViewport,
     setViewportOrientation: actions.setViewportOrientation,
     setViewport3DViewDirection: actions.setViewport3DViewDirection,
+    rotateViewport3DBy: actions.rotateViewport3DBy,
     hydrateSecondaryDisplaySet: actions.hydrateSecondaryDisplaySet,
     getVolumeIdForDisplaySet: actions.getVolumeIdForDisplaySet,
     triggerCreateAnnotationMemo: actions.triggerCreateAnnotationMemo,

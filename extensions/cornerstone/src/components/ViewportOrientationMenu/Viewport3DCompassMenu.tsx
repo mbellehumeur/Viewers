@@ -25,6 +25,28 @@ function Viewport3DCompassMenu({
   const viewportIdToUse = viewportId || gridState.activeViewportId;
   const { IconContainer, className: iconClassName, containerProps } = useIconPresentation();
 
+  const [spin, setSpin] = React.useState(0);
+
+  React.useEffect(() => {
+    if (spin === 0) return;
+    const degreesPerSecondPerSpin = 18;
+    let lastTime = performance.now();
+    let rafId: number;
+    const tick = () => {
+      const now = performance.now();
+      const deltaMs = now - lastTime;
+      lastTime = now;
+      const angle = spin * degreesPerSecondPerSpin * (deltaMs / 1000);
+      commandsManager.runCommand('rotateViewport3DBy', {
+        viewportId: viewportIdToUse,
+        angle,
+      });
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [spin, viewportIdToUse, commandsManager]);
+
   const handleDirectionChange = (direction: 'S' | 'P' | 'R' | 'L' | 'A' | 'I') => {
     commandsManager.runCommand('setViewport3DViewDirection', {
       viewportId: viewportIdToUse,
@@ -82,14 +104,14 @@ function Viewport3DCompassMenu({
         </div>
       </PopoverTrigger>
       <PopoverContent
-        className="w-auto flex-shrink-0 rounded-lg bg-neutral-800 p-3"
+        className="w-auto flex-shrink-0 rounded-lg bg-neutral-800 p-1"
         align={align}
         side={side}
         style={{ left: 0 }}
       >
         <svg
           viewBox="0 0 100 100"
-          className="h-28 w-28"
+          className="h-36 w-36"
           role="group"
           aria-label="View direction"
         >
@@ -134,7 +156,7 @@ function Viewport3DCompassMenu({
             return (
               <g
                 key={dir}
-                className="cursor-pointer select-none"
+                className="cursor-pointer select-none outline-none focus:outline-none focus:ring-0"
                 onClick={() => handleDirectionChange(dir)}
                 onKeyDown={e => e.key === 'Enter' && handleDirectionChange(dir)}
                 role="button"
@@ -159,6 +181,29 @@ function Viewport3DCompassMenu({
             );
           })}
         </svg>
+        <div className="mt-2 flex items-center justify-center gap-2 pt-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setSpin(s => s - 1)}
+            aria-label="Decrease spin"
+          >
+            <Icons.ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="min-w-[3rem] text-center font-mono text-sm font-medium">
+            {spin}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setSpin(s => s + 1)}
+            aria-label="Increase spin"
+          >
+            <Icons.ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );

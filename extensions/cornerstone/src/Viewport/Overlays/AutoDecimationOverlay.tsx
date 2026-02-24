@@ -2,7 +2,7 @@ import React from 'react';
 import { useViewportRendering } from '../../hooks';
 
 /**
- * Renders the auto-decimation message in the viewport top-left, same style as
+ * Renders the auto-decimation message in the viewport top-right, same style as
  * demographic overlay items (Study Date, Series Description).
  */
 function AutoDecimationOverlay({
@@ -32,7 +32,7 @@ function AutoDecimationOverlay({
 
   return (
     <div
-      className={`absolute left-0 viewport-overlay pointer-events-none ${colorClass} ${shadowClass} text-base leading-5 text-left`}
+      className={`absolute right-0 viewport-overlay pointer-events-none ${colorClass} ${shadowClass} text-base leading-5 text-right`}
       style={{ top: '2.15rem', maxWidth: '85%' }}
       title="Volume auto-decimated"
       data-cy="auto-decimation-overlay"
