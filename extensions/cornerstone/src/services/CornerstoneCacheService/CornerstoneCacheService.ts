@@ -252,8 +252,20 @@ class CornerstoneCacheService {
     const volumeData = [];
     let enrichedViewportOptions = viewportOptions || {};
 
-    const volumeAutoDecimationThreshold = this.appConfig?.volumeAutoDecimationThreshold;
-    const showDecimationOverlay = !this.appConfig?.dangerouslyTurnOffDecimationNotification;
+    const volumeDecimation = this.servicesManager.services.customizationService?.getCustomization(
+      'volumeDecimation'
+    ) as
+      | {
+          volumeAutoDecimationThreshold?: number;
+          dangerouslyTurnOffDecimationNotification?: boolean;
+        }
+      | undefined;
+    const volumeAutoDecimationThreshold =
+      volumeDecimation?.volumeAutoDecimationThreshold ??
+      this.appConfig?.volumeAutoDecimationThreshold;
+    const showDecimationOverlay =
+      !(volumeDecimation?.dangerouslyTurnOffDecimationNotification ??
+        this.appConfig?.dangerouslyTurnOffDecimationNotification);
     enrichedViewportOptions = applyAutoDecimationIfNecessary(
       enrichedViewportOptions,
       displaySets,
