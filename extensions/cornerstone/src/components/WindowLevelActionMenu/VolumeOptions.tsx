@@ -1,7 +1,7 @@
 import React, { ReactElement, useState, useEffect, useCallback } from 'react';
 import { useSystem } from '@ohif/core';
 import { cache as cs3DCache } from '@cornerstonejs/core';
-import { AllInOneMenu, Numeric } from '@ohif/ui-next';
+import { Numeric } from '@ohif/ui-next';
 
 const DEFAULT_IJK_DECIMATION: [number, number, number] = [1, 1, 1];
 const MAX_IN_PLANE_DECIMATION = 32;
@@ -140,16 +140,11 @@ export function VolumeOptions({
     decimatedDimensions == null ||
     decimatedVoxels == null
   ) {
-    return (
-      <AllInOneMenu.ItemPanel>
-        <div className="my-1 mt-2 flex flex-col space-y-2" />
-      </AllInOneMenu.ItemPanel>
-    );
+    return <div className="my-1 mt-2 flex flex-col space-y-2" />;
   }
 
   return (
-    <AllInOneMenu.ItemPanel>
-      <div className="my-1 mt-2 flex flex-col space-y-2">
+    <div className="my-1 mt-2 flex flex-col space-y-2">
         <div className="w-full pl-2 pr-1">
           <div className="mt-2 flex flex-col space-y-2">
             <div className="flex h-8 !h-[20px] w-full flex-shrink-0 items-center justify-between px-2 text-base">
@@ -206,6 +201,5 @@ export function VolumeOptions({
           </div>
         </div>
       </div>
-    </AllInOneMenu.ItemPanel>
   );
 }
