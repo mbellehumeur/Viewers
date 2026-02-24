@@ -120,20 +120,16 @@ function decimationEquals(
 }
 
 /**
- * Shows a notification when auto-decimation is applied.
+ * Builds the message and metadata for the viewport overlay when auto-decimation is applied.
  */
-function showAutoDecimationNotification(
+function buildAutoDecimationInfo(
   decimation: Point3,
   displaySets: Types.DisplaySet[],
   originalVoxelCount: number,
   threshold: number,
   servicesManager: AppTypes.ServicesManager
-): void {
-  const { uiNotificationService, displaySetService } = servicesManager.services;
-
-  if (!uiNotificationService?.show) {
-    return;
-  }
+): { message: string } {
+  const { displaySetService } = servicesManager.services;
 
   const labels =
     displaySetService &&
@@ -147,8 +143,9 @@ function showAutoDecimationNotification(
           return null;
         }
         return (
-          (ds as any).SeriesDescription ||
-          (ds as any).description ||
+          (ds as Types.DisplaySet & { SeriesDescription?: string; description?: string })
+            .SeriesDescription ||
+          (ds as Types.DisplaySet & { description?: string }).description ||
           ds.SeriesInstanceUID ||
           ds.displaySetInstanceUID
         );
@@ -168,11 +165,11 @@ function showAutoDecimationNotification(
     messageParts.push(`Display sets: ${labels}.`);
   }
 
-  uiNotificationService.show({
-    title: 'Volume auto-decimated',
-    message: messageParts.join(' '),
-    type: 'warning',
-  });
+  //const message = messageParts.join(' ');
+  const message = 'Warning: Volume decimated';
+
+  console.warn(message);
+  return { message };
 }
 
 /**
@@ -183,7 +180,8 @@ export function applyAutoDecimationIfNecessary(
   viewportOptions: AppTypes.ViewportGrid.GridViewportOptions,
   displaySets: Types.DisplaySet[],
   servicesManager: AppTypes.ServicesManager,
-  volumeAutoDecimationThreshold?: number
+  volumeAutoDecimationThreshold?: number,
+  showDecimationOverlay = true
 ): AppTypes.ViewportGrid.GridViewportOptions {
   if (
     volumeAutoDecimationThreshold == null ||
@@ -286,16 +284,20 @@ export function applyAutoDecimationIfNecessary(
     return viewportOptions;
   }
 
-  showAutoDecimationNotification(
-    chosenDecimation,
-    displaySets,
-    maxVoxelCount,
-    volumeAutoDecimationThreshold,
-    servicesManager
-  );
-
-  return {
+  const newViewportOptions: AppTypes.ViewportGrid.GridViewportOptions = {
     ...viewportOptions,
     ijkDecimation: chosenDecimation,
   };
+
+  if (showDecimationOverlay) {
+    newViewportOptions.autoDecimationInfo = buildAutoDecimationInfo(
+      chosenDecimation,
+      displaySets,
+      maxVoxelCount,
+      volumeAutoDecimationThreshold,
+      servicesManager
+    );
+  }
+
+  return newViewportOptions;
 }

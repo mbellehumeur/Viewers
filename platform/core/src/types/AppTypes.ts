@@ -147,6 +147,7 @@ declare global {
         order: 'closest' | 'downward' | 'upward';
       };
       volumeAutoDecimationThreshold?: number;
+      dangerouslyTurnOffDecimationNotification?: boolean;
     }
 
     export interface Test {

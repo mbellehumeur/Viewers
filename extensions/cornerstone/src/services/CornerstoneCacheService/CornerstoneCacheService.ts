@@ -253,11 +253,13 @@ class CornerstoneCacheService {
     let enrichedViewportOptions = viewportOptions || {};
 
     const volumeAutoDecimationThreshold = this.appConfig?.volumeAutoDecimationThreshold;
+    const showDecimationOverlay = !this.appConfig?.dangerouslyTurnOffDecimationNotification;
     enrichedViewportOptions = applyAutoDecimationIfNecessary(
       enrichedViewportOptions,
       displaySets,
       this.servicesManager,
-      volumeAutoDecimationThreshold
+      volumeAutoDecimationThreshold,
+      showDecimationOverlay
     );
 
 
@@ -355,6 +357,7 @@ class CornerstoneCacheService {
     return {
       viewportType,
       data: volumeData,
+      viewportOptions: enrichedViewportOptions,
     };
   }
 

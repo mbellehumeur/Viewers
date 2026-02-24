@@ -239,6 +239,7 @@ function CustomizableViewportOverlay({
         instanceNumber,
         viewportId,
         toolGroupService,
+        servicesManager,
         isLight,
       };
 
