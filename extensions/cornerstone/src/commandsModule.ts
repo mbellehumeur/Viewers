@@ -2240,6 +2240,49 @@ function commandsModule({
       viewportInfo.setOrientation(orientation);
     },
     /**
+     * Sets the 3D volume viewport camera to look from a standard anatomical direction (S, P, R, L, A, I).
+     * Only applies to VOLUME_3D viewports.
+     */
+    setViewport3DViewDirection: ({
+      viewportId,
+      direction,
+    }: {
+      viewportId: string;
+      direction: 'S' | 'P' | 'R' | 'L' | 'A' | 'I';
+    }) => {
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      if (!viewport || viewport.type !== CoreEnums.ViewportType.VOLUME_3D) {
+        return;
+      }
+      const camera = viewport.getCamera();
+      const focalPoint = camera.focalPoint as [number, number, number];
+      const position = camera.position as [number, number, number];
+      const dir = vec3.sub(vec3.create(), position, focalPoint);
+      const distance = Math.max(vec3.length(dir), 1e-6);
+      // RAS: R +x, A +y, S +z. Look from = camera position axis; viewUp chosen so anatomy is upright.
+      const axes: Record<string, { offset: [number, number, number]; viewUp: [number, number, number] }> = {
+        S: { offset: [0, 0, 1], viewUp: [0, 1, 0] },
+        I: { offset: [0, 0, -1], viewUp: [0, 1, 0] },
+        R: { offset: [-1, 0, 0], viewUp: [0, 0, 1] },
+        L: { offset: [1, 0, 0], viewUp: [0, 0, 1] },
+        A: { offset: [0, -1, 0], viewUp: [0, 0, 1] },
+        P: { offset: [0, 1, 0], viewUp: [0, 0, 1] },
+      };
+      const { offset, viewUp } = axes[direction];
+      if (!offset) return;
+      const newPosition = vec3.add(
+        vec3.create(),
+        focalPoint,
+        vec3.scale(vec3.create(), vec3.fromValues(...offset), distance)
+      ) as CoreTypes.Point3;
+      viewport.setCamera({
+        position: newPosition,
+        focalPoint: focalPoint as CoreTypes.Point3,
+        viewUp: viewUp as CoreTypes.Point3,
+      });
+      viewport.render();
+    },
+    /**
      * Toggles the horizontal flip state of the viewport.
      */
     toggleViewportHorizontalFlip: ({ viewportId }: { viewportId?: string } = {}) => {
@@ -2730,6 +2773,9 @@ function commandsModule({
     setViewportPreset: {
       commandFn: actions.setViewportPreset,
     },
+    setViewport3DViewDirection: {
+      commandFn: actions.setViewport3DViewDirection,
+    },
     setVolumeRenderingQuality: {
       commandFn: actions.setVolumeRenderingQuality,
     },
@@ -2868,6 +2914,7 @@ function commandsModule({
     addNewSegment: actions.addNewSegment,
     loadSegmentationDisplaySetsForViewport: actions.loadSegmentationDisplaySetsForViewport,
     setViewportOrientation: actions.setViewportOrientation,
+    setViewport3DViewDirection: actions.setViewport3DViewDirection,
     hydrateSecondaryDisplaySet: actions.hydrateSecondaryDisplaySet,
     getVolumeIdForDisplaySet: actions.getVolumeIdForDisplaySet,
     triggerCreateAnnotationMemo: actions.triggerCreateAnnotationMemo,
