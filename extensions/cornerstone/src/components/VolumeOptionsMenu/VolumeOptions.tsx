@@ -38,6 +38,8 @@ export function VolumeOptions({
   const [currentKAxisDecimation, setCurrentKAxisDecimation] = useState<number>(
     DEFAULT_IJK_DECIMATION[2]
   );
+  const [sampleDistanceMultiplier, setSampleDistanceMultiplier] = useState(1);
+  const [rotateSampleDistanceFactor, setRotateSampleDistanceFactor] = useState(1);
 
   useEffect(() => {
     try {
@@ -145,16 +147,56 @@ export function VolumeOptions({
 
   return (
     <div className="my-1 mt-2 flex flex-col space-y-2">
+        {/* Volume Downsampling */}
+        <div className="flex h-8 !h-[20px] w-full flex-shrink-0 items-center justify-between px-2 text-base">
+          <span className="text-muted-foreground text-sm">Volume Downsampling</span>
+        </div>
         <div className="w-full pl-2 pr-1">
-          <div className="mt-2 flex flex-col space-y-2">
-            <div className="flex h-8 !h-[20px] w-full flex-shrink-0 items-center justify-between px-2 text-base">
-              <span className="text-muted-foreground text-sm">Volume Downsizing</span>
-              <span className="font-mono text-xs text-muted-foreground">
-                Voxels: {(totalVoxels / 1e6).toFixed(1)}M → {(decimatedVoxels / 1e6).toFixed(1)}M
-              </span>
+          <div className="flex flex-col space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-foreground text-xs">Overall</span>
+              <Numeric.Container
+                mode="stepper"
+                min={1}
+                max={8}
+                step={1}
+                value={sampleDistanceMultiplier}
+                onChange={v => setSampleDistanceMultiplier(Math.round(v as number))}
+                className="border-0 bg-transparent"
+              >
+                <Numeric.NumberStepper
+                  direction="horizontal"
+                  inputWidth="w-7 max-w-7"
+                />
+              </Numeric.Container>
             </div>
-            <div className="bg-background mt-1 mb-1 h-px w-full" />
-            <div className="flex flex-col space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-foreground text-xs">During rotation</span>
+              <Numeric.Container
+                mode="stepper"
+                min={1}
+                max={8}
+                step={1}
+                value={rotateSampleDistanceFactor}
+                onChange={v => setRotateSampleDistanceFactor(Math.round(v as number))}
+                className="border-0 bg-transparent"
+              >
+                <Numeric.NumberStepper
+                  direction="horizontal"
+                  inputWidth="w-7 max-w-7"
+                />
+              </Numeric.Container>
+            </div>
+          </div>
+        </div>
+        <div className="flex h-8 !h-[20px] w-full flex-shrink-0 items-center justify-between px-2 text-base">
+          <span className="text-muted-foreground text-sm">Volume Downsizing</span>
+          <span className="font-mono text-xs text-muted-foreground">
+            Voxels: {(totalVoxels / 1e6).toFixed(1)}M → {(decimatedVoxels / 1e6).toFixed(1)}M
+          </span>
+        </div>
+        <div className="w-full pl-2 pr-1">
+          <div className="flex flex-col space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-foreground text-xs">
                   In-Plane (i,j): {volumeDimensions[0]} →{' '}
@@ -200,6 +242,5 @@ export function VolumeOptions({
             </div>
           </div>
         </div>
-      </div>
   );
 }

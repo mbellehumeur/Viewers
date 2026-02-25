@@ -10,7 +10,8 @@ import {
   useIconPresentation,
 } from '@ohif/ui-next';
 import { useViewportDisplaySets } from '../../hooks/useViewportDisplaySets';
-import { VolumeOptions } from '../WindowLevelActionMenu/VolumeOptions';
+import { VolumeOptions } from './VolumeOptions';
+import { VolumeCropping } from './VolumeCropping';
 
 const VolumeIcon = (Icons as Record<string, React.ComponentType<{ className?: string }>>)['icon-mpr'];
 
@@ -78,6 +79,8 @@ export function VolumeOptionsMenuWrapper(
         sideOffset={5}
       >
         <div className="bg-popover rounded p-2">
+          <VolumeCropping viewportId={viewportIdToUse} />
+          <div className="bg-background my-2 h-px w-full" />
           <VolumeOptions viewportId={viewportIdToUse} />
         </div>
       </PopoverContent>
