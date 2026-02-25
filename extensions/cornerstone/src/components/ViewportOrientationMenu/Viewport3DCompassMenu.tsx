@@ -36,7 +36,7 @@ function Viewport3DCompassMenu({
       const now = performance.now();
       const deltaMs = now - lastTime;
       lastTime = now;
-      const angle = spin * degreesPerSecondPerSpin * (deltaMs / 1000);
+      const angle = -spin * degreesPerSecondPerSpin * (deltaMs / 1000);
       commandsManager.runCommand('rotateViewport3DBy', {
         viewportId: viewportIdToUse,
         angle,
