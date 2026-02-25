@@ -115,6 +115,20 @@ function Viewport3DCompassMenu({
           role="group"
           aria-label="View direction"
         >
+          <defs>
+            <radialGradient
+              id={`compass-sphere-${viewportIdToUse}`}
+              cx="35%"
+              cy="35%"
+              r="65%"
+              fx="35%"
+              fy="35%"
+            >
+              <stop offset="0%" stopColor="hsl(var(--secondary-foreground))" stopOpacity="0.9" />
+              <stop offset="45%" stopColor="hsl(var(--secondary))" stopOpacity="1" />
+              <stop offset="100%" stopColor="hsl(var(--secondary))" stopOpacity="0.55" />
+            </radialGradient>
+          </defs>
           {/* Horizontal axis R-L (solid) */}
           <line
             x1={toXY(180, lineR).x}
@@ -142,13 +156,13 @@ function Viewport3DCompassMenu({
             stroke="white"
             strokeWidth="1.2"
           />
-          {/* Center sphere */}
+          {/* Center sphere - 3D effect via radial gradient */}
           <circle
             cx={cx}
             cy={cy}
             r={5}
-            fill="#7dd3fc"
-            className="drop-shadow-[0_0_6px_rgba(125,211,252,0.8)]"
+            fill={`url(#compass-sphere-${viewportIdToUse})`}
+            className="drop-shadow-[0_0_6px_hsl(var(--secondary)/0.7)]"
           />
           {/* Clickable labels */}
           {dirs.map(({ dir, angle }) => {
@@ -181,7 +195,8 @@ function Viewport3DCompassMenu({
             );
           })}
         </svg>
-        <div className="mt-2 flex items-center justify-center gap-2 pt-2">
+        <div className="mt-2 flex items-center justify-center gap-0 pt-0">
+          <span className="mr-2 text-lg text-neutral-400">Spin</span>
           <Button
             variant="ghost"
             size="icon"
@@ -191,7 +206,7 @@ function Viewport3DCompassMenu({
           >
             <Icons.ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="min-w-[3rem] text-center font-mono text-sm font-medium">
+          <span className="min-w-[1.75rem] text-center font-mono text-sm font-medium">
             {spin}
           </span>
           <Button
