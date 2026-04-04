@@ -55,6 +55,7 @@
     "@babel/runtime": "7.28.2",
     "@cornerstonejs/adapters": "4.20.0",
     "@cornerstonejs/ai": "4.20.0",
+    "@cornerstonejs/cast": "file:../../../cornerstone3D/packages/cast",
     "@cornerstonejs/core": "4.20.0",
     "@cornerstonejs/labelmap-interpolation": "4.20.0",
     "@cornerstonejs/polymorphic-segmentation": "4.20.0",

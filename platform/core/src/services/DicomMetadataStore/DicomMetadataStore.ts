@@ -206,6 +206,13 @@ const BaseImplementation = {
       numberOfFrames > 1 ? addProxyFields(naturalizedDataset) : naturalizedDataset;
 
     study.addInstanceToSeries(naturalizedDataset);
+
+    const { SeriesInstanceUID } = naturalizedDataset;
+    this._broadcastEvent(EVENTS.INSTANCES_ADDED, {
+      StudyInstanceUID,
+      SeriesInstanceUID,
+      madeInClient: true,
+    });
   },
   addInstances(instances, madeInClient = false) {
     const { StudyInstanceUID, SeriesInstanceUID, NumberOfFrames } = instances[0];

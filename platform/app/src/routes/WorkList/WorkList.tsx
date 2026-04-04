@@ -46,6 +46,33 @@ const { sortBySeriesDate } = utils;
 
 const seriesInStudiesMap = new Map();
 
+type CastServiceLike = {
+  getSessionConfig: () => { topic?: string };
+  getConnectionState: () => { subscribed?: boolean };
+};
+
+function useCastTopicWhenSubscribed(servicesManager: { services: object } | undefined): string {
+  const [topic, setTopic] = useState('');
+
+  useEffect(() => {
+    const cast = (servicesManager?.services as { castService?: CastServiceLike } | undefined)
+      ?.castService;
+    if (!cast) {
+      return;
+    }
+    const sync = () => {
+      const subscribed = Boolean(cast.getConnectionState()?.subscribed);
+      const next = cast.getSessionConfig()?.topic?.trim() ?? '';
+      setTopic(subscribed && next ? next : '');
+    };
+    sync();
+    const id = window.setInterval(sync, 1000);
+    return () => window.clearInterval(id);
+  }, [servicesManager]);
+
+  return topic;
+}
+
 /**
  * TODO:
  * - debounce `setFilterValues` (150ms?)
@@ -96,6 +123,7 @@ function WorkList({
   const defaultSortValues =
     shouldUseDefaultSort && canSort ? { sortBy: 'studyDate', sortDirection: 'ascending' } : {};
   const { customizationService } = servicesManager.services;
+  const castTopic = useCastTopicWhenSubscribed(servicesManager);
 
   const sortedStudies = useMemo(() => {
     if (!canSort) {
@@ -559,6 +587,16 @@ function WorkList({
         isReturnEnabled={false}
         WhiteLabeling={appConfig.whiteLabeling}
         showPatientInfo={PatientInfoVisibility.DISABLED}
+        PatientInfo={
+          castTopic ? (
+            <span
+              className="text-muted-foreground max-w-[min(280px,28vw)] truncate pr-1 text-sm"
+              title={castTopic}
+            >
+              {castTopic}
+            </span>
+          ) : undefined
+        }
       />
       <Onboarding />
       <InvestigationalUseDialog dialogConfiguration={appConfig?.investigationalUseDialog} />
