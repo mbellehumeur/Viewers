@@ -90,6 +90,18 @@ const getImageLoaderType = imageId => {
 };
 
 class DicomLoaderService {
+  /**
+   * Cast / client-ingested instances may carry the original Part 10 buffer. Try this before
+   * getDataByImageType so SEG (and similar) loaders never receive cornerstone pixel buffers.
+   */
+  getCastEmbeddedDicomBuffer(dataset) {
+    const inst = dataset?.instance;
+    const buf = inst?._castDicomArrayBuffer || dataset?._castDicomArrayBuffer;
+    if (buf instanceof ArrayBuffer && buf.byteLength > 0) {
+      return Promise.resolve(buf);
+    }
+  }
+
   getLocalData(dataset, studies) {
     // Use referenced imageInstance
     const imageInstance = getImageInstance(dataset);
@@ -200,6 +212,7 @@ class DicomLoaderService {
   }
 
   *getLoaderIterator(dataset, studies, headers) {
+    yield this.getCastEmbeddedDicomBuffer(dataset);
     yield this.getLocalData(dataset, studies);
     yield this.getDataByImageType(dataset);
     yield this.getDataByDatasetType(dataset);

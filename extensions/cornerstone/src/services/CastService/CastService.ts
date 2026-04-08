@@ -29,7 +29,86 @@ type CommandsManagerLike = {
   runCommand: (commandName: string, commandOptions?: Record<string, unknown>) => void;
 };
 
+type CastLayerDisplaySet = {
+  displaySetInstanceUID: string;
+  SOPInstanceUID?: string;
+};
+
+type ViewportGridStateLike = {
+  viewports?: Map<
+    string,
+    { viewportId?: string; displaySetInstanceUIDs?: string[] }
+  >;
+};
+
+type ServicesManagerLike = {
+  services: {
+    displaySetService: {
+      getDisplaySetsForSeries: (seriesInstanceUID: string) => CastLayerDisplaySet[];
+    };
+    viewportGridService: {
+      getActiveViewportId: () => string | undefined;
+      getState: () => ViewportGridStateLike;
+      getDisplaySetsUIDsForViewport: (viewportId: string) => string[];
+    };
+  };
+};
+
 const CAST_TOPIC_SESSION_KEY = 'ohif.cast.sessionTopic';
+
+function getHubEventLower(
+  event: CastMessage['event'] | undefined
+): string {
+  const hubEvent = event?.['hub.event'];
+  return typeof hubEvent === 'string' ? hubEvent.toLowerCase() : '';
+}
+
+function normalizeStudyUID(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.trim().replace(/^urn:oid:/i, '');
+}
+
+function extractStudyUIDFromResource(resource: unknown): string {
+  if (!resource || typeof resource !== 'object') {
+    console.debug('CastService: study resource missing or invalid', resource);
+    return '';
+  }
+
+  const typedResource = resource as {
+    uid?: unknown;
+    identifier?: Array<{ system?: unknown; value?: unknown }>;
+  };
+
+  const fromUid = normalizeStudyUID(typedResource.uid);
+  if (fromUid) {
+    console.debug('CastService: study UID resolved from resource.uid', fromUid);
+    return fromUid;
+  }
+
+  const identifiers = Array.isArray(typedResource.identifier)
+    ? typedResource.identifier
+    : [];
+  const dicomUidIdentifier = identifiers.find(
+    (identifier) =>
+      typeof identifier?.system === 'string' &&
+      identifier.system.toLowerCase() === 'urn:dicom:uid'
+  );
+  const fromIdentifier = normalizeStudyUID(dicomUidIdentifier?.value);
+  if (fromIdentifier) {
+    console.debug(
+      'CastService: study UID resolved from resource.identifier urn:dicom:uid',
+      fromIdentifier
+    );
+  } else {
+    console.debug(
+      'CastService: no study UID found in resource.identifier',
+      typedResource.identifier
+    );
+  }
+  return fromIdentifier;
+}
 
 export default class CastService extends PubSubService {
   public static EVENTS = {
@@ -39,19 +118,30 @@ export default class CastService extends PubSubService {
   public static REGISTRATION = {
     name: 'castService',
     altName: 'CastService',
-    create: ({ extensionManager, commandsManager }: OhifTypes.Extensions.ExtensionParams) =>
+    create: ({
+      extensionManager,
+      commandsManager,
+      servicesManager,
+    }: OhifTypes.Extensions.ExtensionParams) =>
       new CastService(
         extensionManager as ExtensionManagerLike,
-        commandsManager as CommandsManagerLike
+        commandsManager as CommandsManagerLike,
+        servicesManager as ServicesManagerLike
       ),
   };
 
   private _client: CastClient;
   private _commandsManager: CommandsManagerLike;
+  private _servicesManager: ServicesManagerLike;
 
-  constructor(extensionManager: ExtensionManagerLike, commandsManager: CommandsManagerLike) {
+  constructor(
+    extensionManager: ExtensionManagerLike,
+    commandsManager: CommandsManagerLike,
+    servicesManager: ServicesManagerLike
+  ) {
     super(CastService.EVENTS);
     this._commandsManager = commandsManager;
+    this._servicesManager = servicesManager;
 
     const castConfig = extensionManager.appConfig.cast || extensionManager.appConfig.fhircast;
     if (!castConfig) {
@@ -201,17 +291,28 @@ export default class CastService extends PubSubService {
 
   private _handleImagingStudyOpen(message: CastMessage): void {
     const event = message.event;
-    if (!event || event['hub.event'] !== 'imagingstudy-open') {
+    const hubEventLower = getHubEventLower(event);
+    if (hubEventLower !== 'imagingstudy-open') {
       return;
     }
+    console.debug('CastService: processing imagingstudy-open message', message);
     const contextItems = Array.isArray(event.context)
-      ? (event.context as Array<{ key?: string; resource?: { uid?: string } }>)
+      ? (event.context as Array<{ key?: string; resource?: unknown }>)
       : [];
+    console.debug('CastService: imagingstudy-open context items', contextItems);
     const studyResource = contextItems.find(item => item.key === 'study')?.resource;
-    const studyUID = studyResource?.uid?.replaceAll('urn:oid:', '') ?? '';
+    if (!studyResource) {
+      console.debug(
+        'CastService: no context item with key "study" found',
+        contextItems.map(item => item?.key)
+      );
+    }
+    const studyUID = extractStudyUIDFromResource(studyResource);
     if (!studyUID) {
+      console.debug('CastService: study UID not found for imagingstudy-open');
       return;
     }
+    console.debug('CastService: navigating to study UID', studyUID);
     const currentLocation =
       typeof window !== 'undefined' ? window.location.toString() : '';
     if (currentLocation.includes(studyUID)) {
@@ -224,7 +325,7 @@ export default class CastService extends PubSubService {
 
   private _handleImagingStudyClose(message: CastMessage): void {
     const event = message.event;
-    if (!event || event['hub.event'] !== 'imagingstudy-close') {
+    if (getHubEventLower(event) !== 'imagingstudy-close') {
       return;
     }
     this._commandsManager.runCommand('navigateHistory', {
@@ -260,6 +361,12 @@ export default class CastService extends PubSubService {
       if (!studyUID) {
         return;
       }
+      // Full P10 buffer: loaders that use cornerstone image cache return parsed pixel data, not a
+      // DICOM file, which breaks SEG parsing — prefer this before wadors/blob in DicomLoaderService.
+      naturalizedDataset._castDicomArrayBuffer = arrayBuffer.slice(0);
+      // Fallback URL for code paths that only fetch by instance.url.
+      const blob = new Blob([arrayBuffer], { type: 'application/dicom' });
+      naturalizedDataset.url = URL.createObjectURL(blob);
       DicomMetadataStore.addInstances([naturalizedDataset], true);
       const currentLocation =
         typeof window !== 'undefined' ? window.location.toString() : '';
@@ -268,9 +375,102 @@ export default class CastService extends PubSubService {
           to: '/viewer?StudyInstanceUIDs=' + studyUID + '&Cast',
         });
       }
+      this._scheduleCastDicomSendLayer({
+        SeriesInstanceUID: naturalizedDataset.SeriesInstanceUID as string | undefined,
+        SOPInstanceUID: naturalizedDataset.SOPInstanceUID as string | undefined,
+      });
     } catch (err) {
       console.error('CastService: dicom-send handling failed', err);
     }
+  }
+
+  /**
+   * After navigation or first paint, add the received display set as a viewport layer using the
+   * same command as Study Browser "Add as Layer" (not hydrateSecondaryDisplaySet, which no-ops if
+   * the cornerstone viewport is not ready yet).
+   */
+  private _scheduleCastDicomSendLayer(meta: {
+    SeriesInstanceUID?: string;
+    SOPInstanceUID?: string;
+  }): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    let done = false;
+    let attempt = 0;
+    const maxAttempts = 24;
+    const intervalMs = 300;
+    const tryAdd = () => {
+      if (done || attempt++ > maxAttempts) {
+        return;
+      }
+      done = this._addCastDicomSendAsLayer(meta);
+      if (!done) {
+        window.setTimeout(tryAdd, intervalMs);
+      }
+    };
+    queueMicrotask(tryAdd);
+  }
+
+  private _resolveCastLayerViewportId(): string | undefined {
+    const { viewportGridService } = this._servicesManager.services;
+    const active = viewportGridService.getActiveViewportId();
+    if (active) {
+      return active;
+    }
+    const viewports = viewportGridService.getState()?.viewports;
+    if (!viewports?.size) {
+      return undefined;
+    }
+    for (const [mapKey, vp] of viewports) {
+      if (vp?.displaySetInstanceUIDs?.length) {
+        return vp.viewportId ?? mapKey;
+      }
+    }
+    const firstKey = viewports.keys().next();
+    return firstKey.done ? undefined : firstKey.value;
+  }
+
+  private _addCastDicomSendAsLayer(meta: {
+    SeriesInstanceUID?: string;
+    SOPInstanceUID?: string;
+  }): boolean {
+    const { SeriesInstanceUID, SOPInstanceUID } = meta;
+    if (!SeriesInstanceUID) {
+      return false;
+    }
+
+    const { displaySetService, viewportGridService } = this._servicesManager.services;
+    const viewportId = this._resolveCastLayerViewportId();
+    if (!viewportId) {
+      return false;
+    }
+
+    const candidates = displaySetService.getDisplaySetsForSeries(SeriesInstanceUID);
+    if (!candidates?.length) {
+      return false;
+    }
+
+    const displaySet =
+      (SOPInstanceUID &&
+        candidates.find(ds => ds.SOPInstanceUID === SOPInstanceUID)) ??
+      candidates[candidates.length - 1];
+
+    if (!displaySet?.displaySetInstanceUID) {
+      return false;
+    }
+
+    const uid = displaySet.displaySetInstanceUID;
+    const currentUids = viewportGridService.getDisplaySetsUIDsForViewport(viewportId) ?? [];
+    if (currentUids.includes(uid)) {
+      return true;
+    }
+
+    this._commandsManager.runCommand('addDisplaySetAsLayer', {
+      viewportId,
+      displaySetInstanceUID: uid,
+    });
+    return true;
   }
 }
 
@@ -280,7 +480,7 @@ type DicomSendPayload =
 
 function extractDicomPayload(message: CastMessage): DicomSendPayload | null {
   const castEvent = message.event;
-  if (!castEvent || castEvent['hub.event'] !== 'dicom-send') {
+  if (getHubEventLower(castEvent) !== 'dicom-send') {
     return null;
   }
   const context = castEvent.context;
