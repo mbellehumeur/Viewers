@@ -197,7 +197,7 @@ const cornerstoneExtension: Types.Extensions.Extension = {
     servicesManager.registerService(SegmentationService.REGISTRATION);
     servicesManager.registerService(CornerstoneCacheService.REGISTRATION);
     servicesManager.registerService(ColorbarService.REGISTRATION);
-    servicesManager.registerService(CastService.REGISTRATION);
+    //servicesManager.registerService(CastService.REGISTRATION);
 
     const { syncGroupService } = servicesManager.services;
     syncGroupService.registerCustomSynchronizer('frameview', createFrameViewSynchronizer);

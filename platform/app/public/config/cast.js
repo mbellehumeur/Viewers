@@ -7,7 +7,13 @@ window.config = {
     extensions: [],
     modes: [],
   
-    showStudyList: true,
+    /**
+     * Routes (see platform/app/src/routes/index.tsx + appInit.js):
+     * - showStudyList: false -> '/' is an empty home (header only); study list is at studyListPath.
+     * - studyListPath defaults to '/worklist' when showStudyList is false.
+     */
+    showStudyList: false,
+    studyListPath: '/worklist',
     // some windows systems have issues with more than 3 web workers
     maxNumberOfWebWorkers: 3,
     // below flag is for performance reasons, but it might not work for all servers
@@ -30,8 +36,8 @@ window.config = {
     measurementTrackingMode: 'simplified',
   
     cast: {
-      defaultHubName: 'SLICER-HUB',
-      actors: ['ID', 'EC'],
+      defaultHubName: 'SLICER-HUB-CLOUD',
+
       hubs: [
         {
           name: 'SLICER-HUB-CLOUD',
@@ -335,31 +341,6 @@ window.config = {
       },
     ],
   
-    // segmentation: {
-    //   segmentLabel: {
-    //     enabledByDefault: true,
-    //     labelColor: [255, 255, 0, 1], // must be an array
-    //     hoverTimeout: 1,
-    //     background: 'rgba(100, 100, 100, 0.5)', // can be any valid css color
-    //   },
-    // },
-    // whiteLabeling: {
-    //   createLogoComponentFn: function (React) {
-    //     return React.createElement(
-    //       'a',
-    //       {
-    //         target: '_self',
-    //         rel: 'noopener noreferrer',
-    //         className: 'text-purple-600 line-through',
-    //         href: '_X___IDC__LOGO__LINK___Y_',
-    //       },
-    //       React.createElement('img', {
-    //         src: './Logo.svg',
-    //         className: 'w-14 h-14',
-    //       })
-    //     );
-    //   },
-    // },
     investigationalUseDialog: { option: 'never' },
   };
   

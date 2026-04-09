@@ -75,6 +75,12 @@ type CastClientLike = {
 };
 
 const CAST_TOPIC_SESSION_KEY = 'ohif.cast.sessionTopic';
+const ID_ACTOR_KEYWORD = 'ID';
+
+function ensureIdActor(actors?: string[]): string[] {
+  const list = Array.isArray(actors) ? actors.filter(Boolean) : [];
+  return list.includes(ID_ACTOR_KEYWORD) ? list : [...list, ID_ACTOR_KEYWORD];
+}
 
 function getHubEventLower(
   event: CastMessage['event'] | undefined
@@ -175,7 +181,7 @@ export default class CastService extends PubSubService {
       hub: selectedHub,
       session: {
         subscriberName: castConfig.subscriberName,
-        actors: castConfig.actors,
+        actors: ensureIdActor(castConfig.actors),
         topic: initialTopic,
         events: selectedHub.events ?? ['*'],
         lease: selectedHub.lease ?? 999,
