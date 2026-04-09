@@ -33,6 +33,26 @@ const VERSION_NUMBER = fs.readFileSync(path.join(__dirname, '../version.txt'), '
 
 const COMMIT_HASH = fs.readFileSync(path.join(__dirname, '../commit.txt'), 'utf8') || '';
 
+// Local vtk-js CastClient (IO/Core): sibling repo at ProjectWeek45/vtk-js next to Viewers/
+const VTK_CAST_CLIENT_INDEX = path.resolve(
+  __dirname,
+  '../../vtk-js/Sources/IO/Core/CastClient/index.js'
+);
+// Local CastClient imports `vtk.js/Sources/macros` (source-tree id); map to published @kitware/vtk.js
+function resolvePublishedVtkMacros() {
+  for (const root of [
+    path.resolve(__dirname, '../node_modules'),
+    path.resolve(__dirname, '../../../node_modules'),
+  ]) {
+    const p = path.join(root, '@kitware/vtk.js/macros.js');
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  return null;
+}
+const VTK_MACROS_PUBLISHED = resolvePublishedVtkMacros();
+
 //
 dotenv.config();
 
@@ -201,6 +221,13 @@ module.exports = (env, argv, { SRC_DIR, ENTRY }) => {
         '@hooks': path.resolve(__dirname, '../platform/app/src/hooks'),
         '@routes': path.resolve(__dirname, '../platform/app/src/routes'),
         '@state': path.resolve(__dirname, '../platform/app/src/state'),
+        // Use local vtk-js CastClient only; rest of @kitware/vtk.js stays from node_modules
+        ...(fs.existsSync(VTK_CAST_CLIENT_INDEX) && VTK_MACROS_PUBLISHED
+          ? {
+              '@kitware/vtk.js/Sources/IO/Core/CastClient': VTK_CAST_CLIENT_INDEX,
+              'vtk.js/Sources/macros': VTK_MACROS_PUBLISHED,
+            }
+          : {}),
       },
       // Which directories to search when resolving modules
       modules: [
