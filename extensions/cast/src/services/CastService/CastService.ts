@@ -62,6 +62,9 @@ type ServicesManagerLike = {
 
 type CastClientLike = {
   onMessage: (callback: (message: CastMessage) => void) => void;
+  onConnectionStateChange: (
+    callback: (state: string, detail?: unknown) => void
+  ) => void;
   destroy: () => void;
   getHubConfig: () => HubConfig;
   setTopic: (topic: string) => void;
@@ -72,6 +75,7 @@ type CastClientLike = {
   publish: (castMessage: Record<string, unknown>) => Promise<Response | null>;
   getConnectionState: () => HubRuntimeState;
   getSessionConfig: () => SessionConfig;
+  sendGetResponse: (requestId: string, data: unknown, topic?: string) => void;
 };
 
 const CAST_TOPIC_SESSION_KEY = 'ohif.cast.sessionTopic';
@@ -120,6 +124,22 @@ function extractStudyUIDFromResource(resource: unknown): string {
       identifier.system.toLowerCase() === 'urn:dicom:uid'
   );
   return normalizeStudyUID(dicomUidIdentifier?.value);
+}
+
+function getActorKeyword(actor: unknown): string {
+  if (typeof actor === 'string') {
+    return actor.trim().toUpperCase();
+  }
+  if (!actor || typeof actor !== 'object') {
+    return '';
+  }
+  const typedActor = actor as { keyword?: unknown; id?: unknown; key?: unknown };
+  const value =
+    (typeof typedActor.keyword === 'string' && typedActor.keyword) ||
+    (typeof typedActor.id === 'string' && typedActor.id) ||
+    (typeof typedActor.key === 'string' && typedActor.key) ||
+    '';
+  return value.trim().toUpperCase();
 }
 
 export default class CastService extends PubSubService {
@@ -199,9 +219,16 @@ export default class CastService extends PubSubService {
     // });
 
     this._client.onMessage((message: CastMessage) => {
+      this._handleGetRequest(message);
+      this._handleGetResponse(message);
       this._handleImagingStudyOpen(message);
       this._handleImagingStudyClose(message);
       this._handleDicomSend(message);
+    });
+    this._client.onConnectionStateChange((wsState: string) => {
+      if (wsState === 'connected') {
+        void this._requestFhircastContext();
+      }
     });
 
     void this._start();
@@ -229,7 +256,14 @@ export default class CastService extends PubSubService {
   }
 
   public async castSubscribe(): Promise<number | string> {
-    return this._client.subscribe();
+    const subscribeResult = await this._client.subscribe();
+    console.info('CastService(vtk): castSubscribe result', subscribeResult);
+    if (subscribeResult !== 202) {
+      console.warn(
+        'CastService(vtk): skipping auto FHIRcastContext GET; subscribe did not return 202'
+      );
+    }
+    return subscribeResult;
   }
 
   public async castUnsubscribe(): Promise<void> {
@@ -246,6 +280,88 @@ export default class CastService extends PubSubService {
 
   public getSessionConfig() {
     return this._client.getSessionConfig();
+  }
+
+  private async _requestFhircastContext(): Promise<void> {
+    const sessionConfig = this._client.getSessionConfig();
+    const hubConfig = this._client.getHubConfig();
+    const connectionState = this._client.getConnectionState();
+    const subscriber = sessionConfig.subscriberName?.trim() ?? '';
+    const topic = sessionConfig.topic?.trim() ?? '';
+    const token = connectionState.token?.trim() ?? '';
+    const hubEndpoint = hubConfig.hub_endpoint?.trim() ?? '';
+    if (!subscriber || !topic || !token || !hubEndpoint) {
+      console.warn('CastService(vtk): missing values for auto FHIRcastContext GET', {
+        hasSubscriber: Boolean(subscriber),
+        hasTopic: Boolean(topic),
+        hasToken: Boolean(token),
+        hasHubEndpoint: Boolean(hubEndpoint),
+      });
+      return;
+    }
+
+    let getUrl: URL;
+    try {
+      getUrl = new URL(hubEndpoint);
+      getUrl.pathname = `${getUrl.pathname.replace(/\/$/, '')}/cast-request`;
+    } catch (err) {
+      console.error('CastService(vtk): invalid hub endpoint for cast-request', {
+        hubEndpoint,
+        err,
+      });
+      return;
+    }
+
+    const payload = {
+      subscriber,
+      topic,
+      dataType: 'FHIRcastContext',
+      actor: 'WORKLIST_CLIENT',
+    };
+
+    try {
+      console.info(
+        'CastService(vtk): requesting FHIRcastContext after websocket connected',
+        getUrl.toString(),
+        payload
+      );
+      const response = await fetch(getUrl.toString(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const responseText = await response.text();
+      if (!response.ok) {
+        console.warn(
+          'CastService(vtk): auto FHIRcastContext GET returned non-OK response',
+          response.status,
+          responseText
+        );
+      } else {
+        try {
+          const parsed = JSON.parse(responseText) as {
+            response?: { event?: CastMessage['event'] };
+          };
+          const responseEvent = parsed?.response?.event;
+          if (responseEvent) {
+            this._handleGetResponseEvent(responseEvent);
+          }
+        } catch {
+          // keep compatibility with non-JSON or unexpected hub responses
+        }
+        console.info(
+          'CastService(vtk): auto FHIRcastContext GET accepted',
+          response.status,
+          responseText
+        );
+      }
+    } catch (err) {
+      // keep subscribe flow resilient if hub GET endpoint is unavailable
+      console.error('CastService(vtk): failed to request FHIRcastContext', err);
+    }
   }
 
   private _readStoredTopic(): string {
@@ -323,6 +439,118 @@ export default class CastService extends PubSubService {
     if (!studyUID) {
       return;
     }
+    const currentLocation =
+      typeof window !== 'undefined' ? window.location.toString() : '';
+    if (currentLocation.includes(studyUID)) {
+      return;
+    }
+    this._commandsManager.runCommand('navigateHistory', {
+      to: '/viewer?StudyInstanceUIDs=' + studyUID + '&Cast',
+    });
+  }
+
+  private _handleGetResponse(message: CastMessage): void {
+    const event = message.event;
+    if (getHubEventLower(event) !== 'get-response') {
+      return;
+    }
+    this._handleGetResponseEvent(event);
+  }
+
+  private _handleGetRequest(message: CastMessage): void {
+    const event = message.event;
+    if (getHubEventLower(event) !== 'get-request') {
+      return;
+    }
+
+    const context = event.context as { requestId?: unknown; dataType?: unknown } | undefined;
+    const requestId = context?.requestId;
+    if (typeof requestId !== 'string' || !requestId) {
+      return;
+    }
+
+    const dataType = typeof context?.dataType === 'string' ? context.dataType : '';
+    if (dataType.trim().toUpperCase() !== 'PNG') {
+      return;
+    }
+
+    const actorKeyword = getActorKeyword((message as { actor?: unknown }).actor);
+    if (actorKeyword !== ID_ACTOR_KEYWORD) {
+      return;
+    }
+
+    const pngBase64 = this._captureViewerPngBase64();
+    if (!pngBase64) {
+      return;
+    }
+
+    this._client.sendGetResponse(
+      requestId,
+      {
+        'context.type': 'Image',
+        context: [
+          {
+            key: 'image',
+            resource: {
+              resourceType: 'Binary',
+              contentType: 'image/png',
+              data: pngBase64,
+            },
+          },
+        ],
+      },
+      event['hub.topic']
+    );
+  }
+
+  private _captureViewerPngBase64(): string {
+    if (typeof document === 'undefined') {
+      return '';
+    }
+    const canvases = Array.from(
+      document.querySelectorAll<HTMLCanvasElement>('canvas')
+    ).filter((canvas) => canvas.width > 0 && canvas.height > 0);
+    if (!canvases.length) {
+      return '';
+    }
+    const canvas =
+      canvases.find((c) => c.closest('.viewport-element, [data-viewport-id]')) ||
+      canvases[0];
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      const marker = 'base64,';
+      const idx = dataUrl.indexOf(marker);
+      return idx >= 0 ? dataUrl.slice(idx + marker.length) : '';
+    } catch {
+      return '';
+    }
+  }
+
+  private _handleGetResponseEvent(event: CastMessage['event']): void {
+    const data = (event.context as { data?: unknown } | undefined)?.data;
+    this._openStudyFromContextData(data);
+  }
+
+  private _openStudyFromContextData(data: unknown): void {
+    if (!data || typeof data !== 'object') {
+      return;
+    }
+
+    const typedData = data as {
+      'context.type'?: unknown;
+      context?: Array<{ key?: string; resource?: unknown }> | unknown;
+    };
+    if (typedData['context.type'] !== 'ImagingStudy') {
+      return;
+    }
+
+    const contextItems = Array.isArray(typedData.context) ? typedData.context : [];
+    const studyResource = contextItems.find(item => item?.key === 'study')?.resource;
+    const studyUID = extractStudyUIDFromResource(studyResource);
+    if (!studyUID) {
+      return;
+    }
+
     const currentLocation =
       typeof window !== 'undefined' ? window.location.toString() : '';
     if (currentLocation.includes(studyUID)) {
