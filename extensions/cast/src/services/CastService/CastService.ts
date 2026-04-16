@@ -303,9 +303,9 @@ export default class CastService extends PubSubService {
     let getUrl: URL;
     try {
       getUrl = new URL(hubEndpoint);
-      getUrl.pathname = `${getUrl.pathname.replace(/\/$/, '')}/cast-request`;
+      getUrl.pathname = `${getUrl.pathname.replace(/\/$/, '')}/request`;
     } catch (err) {
-      console.error('CastService(vtk): invalid hub endpoint for cast-request', {
+      console.error('CastService(vtk): invalid hub endpoint for request', {
         hubEndpoint,
         err,
       });
@@ -470,7 +470,13 @@ export default class CastService extends PubSubService {
     }
 
     const dataType = typeof context?.dataType === 'string' ? context.dataType : '';
-    if (dataType.trim().toUpperCase() !== 'PNG') {
+    const normalizedDataType = dataType.trim().toUpperCase();
+    if (
+      normalizedDataType !== 'PNGFULLSIZE' &&
+      normalizedDataType !== 'JPGFULLSIZE' &&
+      normalizedDataType !== 'PNGTHUMBNAIL' &&
+      normalizedDataType !== 'JPGTHUMBNAIL'
+    ) {
       return;
     }
 
@@ -479,8 +485,14 @@ export default class CastService extends PubSubService {
       return;
     }
 
-    const pngBase64 = this._captureViewerPngBase64();
-    if (!pngBase64) {
+    const image =
+      normalizedDataType === 'PNGTHUMBNAIL'
+        ? { contentType: 'image/png', data: this._captureViewerPngThumbnailBase64() }
+        : normalizedDataType === 'JPGTHUMBNAIL'
+          ? { contentType: 'image/jpeg', data: this._captureViewerJpegThumbnailBase64() }
+          : { contentType: 'image/png', data: this._captureViewerPngBase64() };
+
+    if (!image.data) {
       return;
     }
 
@@ -493,8 +505,8 @@ export default class CastService extends PubSubService {
             key: 'image',
             resource: {
               resourceType: 'Binary',
-              contentType: 'image/png',
-              data: pngBase64,
+              contentType: image.contentType,
+              data: image.data,
             },
           },
         ],
@@ -503,21 +515,95 @@ export default class CastService extends PubSubService {
     );
   }
 
-  private _captureViewerPngBase64(): string {
+  private _getPreferredViewerCanvas(): HTMLCanvasElement | null {
     if (typeof document === 'undefined') {
-      return '';
+      return null;
     }
     const canvases = Array.from(
       document.querySelectorAll<HTMLCanvasElement>('canvas')
     ).filter((canvas) => canvas.width > 0 && canvas.height > 0);
     if (!canvases.length) {
+      return null;
+    }
+    return (
+      canvases.find((c) => c.closest('.viewport-element, [data-viewport-id]')) ||
+      canvases[0] ||
+      null
+    );
+  }
+
+  private _captureViewerPngBase64(): string {
+    const canvas = this._getPreferredViewerCanvas();
+    if (!canvas) {
       return '';
     }
-    const canvas =
-      canvases.find((c) => c.closest('.viewport-element, [data-viewport-id]')) ||
-      canvases[0];
     try {
       const dataUrl = canvas.toDataURL('image/png');
+      const marker = 'base64,';
+      const idx = dataUrl.indexOf(marker);
+      return idx >= 0 ? dataUrl.slice(idx + marker.length) : '';
+    } catch {
+      return '';
+    }
+  }
+
+  private _captureViewerPngThumbnailBase64(maxWidth = 160): string {
+    if (typeof document === 'undefined') {
+      return '';
+    }
+    const source = this._getPreferredViewerCanvas();
+    if (!source) {
+      return '';
+    }
+
+    const scale = Math.min(1, maxWidth / source.width);
+    const width = Math.max(1, Math.round(source.width * scale));
+    const height = Math.max(1, Math.round(source.height * scale));
+
+    const thumb = document.createElement('canvas');
+    thumb.width = width;
+    thumb.height = height;
+    const ctx = thumb.getContext('2d');
+    if (!ctx) {
+      return '';
+    }
+    try {
+      ctx.drawImage(source, 0, 0, width, height);
+      const dataUrl = thumb.toDataURL('image/png');
+      const marker = 'base64,';
+      const idx = dataUrl.indexOf(marker);
+      return idx >= 0 ? dataUrl.slice(idx + marker.length) : '';
+    } catch {
+      return '';
+    }
+  }
+
+  private _captureViewerJpegThumbnailBase64(
+    maxWidth = 160,
+    quality = 0.85
+  ): string {
+    if (typeof document === 'undefined') {
+      return '';
+    }
+    const source = this._getPreferredViewerCanvas();
+    if (!source) {
+      return '';
+    }
+
+    const scale = Math.min(1, maxWidth / source.width);
+    const width = Math.max(1, Math.round(source.width * scale));
+    const height = Math.max(1, Math.round(source.height * scale));
+
+    const thumb = document.createElement('canvas');
+    thumb.width = width;
+    thumb.height = height;
+    const ctx = thumb.getContext('2d');
+    if (!ctx) {
+      return '';
+    }
+    try {
+      ctx.drawImage(source, 0, 0, width, height);
+      const dataUrl = thumb.toDataURL('image/jpeg', quality);
       const marker = 'base64,';
       const idx = dataUrl.indexOf(marker);
       return idx >= 0 ? dataUrl.slice(idx + marker.length) : '';
@@ -567,7 +653,7 @@ export default class CastService extends PubSubService {
       return;
     }
     this._commandsManager.runCommand('navigateHistory', {
-      to: '/',
+      to: '/viewer/',
     });
   }
 
