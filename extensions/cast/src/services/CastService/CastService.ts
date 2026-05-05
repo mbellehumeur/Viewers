@@ -219,8 +219,8 @@ export default class CastService extends PubSubService {
     // });
 
     this._client.onMessage((message: CastMessage) => {
-      this._handleGetRequest(message);
-      this._handleGetResponse(message);
+      this._handleCastRequest(message);
+      this._handleCastResponse(message);
       this._handleImagingStudyOpen(message);
       this._handleImagingStudyClose(message);
       this._handleDicomSend(message);
@@ -347,7 +347,7 @@ export default class CastService extends PubSubService {
           };
           const responseEvent = parsed?.response?.event;
           if (responseEvent) {
-            this._handleGetResponseEvent(responseEvent);
+            this._handleCastResponseEvent(responseEvent);
           }
         } catch {
           // keep compatibility with non-JSON or unexpected hub responses
@@ -449,15 +449,15 @@ export default class CastService extends PubSubService {
     });
   }
 
-  private _handleGetResponse(message: CastMessage): void {
+  private _handleCastResponse(message: CastMessage): void {
     const event = message.event;
     if (getHubEventLower(event) !== 'get-response') {
       return;
     }
-    this._handleGetResponseEvent(event);
+    this._handleCastResponseEvent(event);
   }
 
-  private _handleGetRequest(message: CastMessage): void {
+  private _handleCastRequest(message: CastMessage): void {
     const event = message.event;
     if (getHubEventLower(event) !== 'get-request') {
       return;
@@ -612,7 +612,7 @@ export default class CastService extends PubSubService {
     }
   }
 
-  private _handleGetResponseEvent(event: CastMessage['event']): void {
+  private _handleCastResponseEvent(event: CastMessage['event']): void {
     const data = (event.context as { data?: unknown } | undefined)?.data;
     this._openStudyFromContextData(data);
   }
