@@ -18,6 +18,7 @@ type CastConfig = {
   defaultHubName?: string;
   hubs?: ConfigCastHub[];
   productName?: string;
+  productVersion?: string;
   autoReconnect?: boolean;
   subscriberName?: string;
   topic?: string;
@@ -75,15 +76,34 @@ type CastClientLike = {
   publish: (castMessage: Record<string, unknown>) => Promise<Response | null>;
   getConnectionState: () => HubRuntimeState;
   getSessionConfig: () => SessionConfig;
-  sendGetResponse: (requestId: string, data: unknown, topic?: string) => void;
+  sendCastRequestResponse: (requestId: string, data: unknown, topic?: string) => void;
+  request: (args: {
+    subscriber: string;
+    topic?: string;
+    dataType?: string;
+    actor?: string;
+    endpoint?: string;
+  }) => Promise<{ ok: boolean; status: number; data: unknown }>;
 };
 
 const CAST_TOPIC_SESSION_KEY = 'ohif.cast.sessionTopic';
 const ID_ACTOR_KEYWORD = 'ID';
+const SUBSCRIBER_ID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
 function ensureIdActor(actors?: string[]): string[] {
   const list = Array.isArray(actors) ? actors.filter(Boolean) : [];
   return list.includes(ID_ACTOR_KEYWORD) ? list : [...list, ID_ACTOR_KEYWORD];
+}
+
+function generateSubscriberName(productName: string): string {
+  const base =
+    productName.trim().replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '') ||
+    'OHIF';
+  let suffix = '';
+  for (let i = 0; i < 6; i += 1) {
+    suffix += SUBSCRIBER_ID_ALPHABET[Math.floor(Math.random() * SUBSCRIBER_ID_ALPHABET.length)];
+  }
+  return `${base}-${suffix}`;
 }
 
 function getHubEventLower(
@@ -142,6 +162,23 @@ function getActorKeyword(actor: unknown): string {
   return value.trim().toUpperCase();
 }
 
+function decodeTopicFromJwt(token: string): string {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) {
+      return '';
+    }
+    const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const paddingLength = (4 - (payloadBase64.length % 4)) % 4;
+    const paddedPayload = payloadBase64 + '='.repeat(paddingLength);
+    const payloadJson = atob(paddedPayload);
+    const payload = JSON.parse(payloadJson) as { topic?: unknown };
+    return typeof payload.topic === 'string' ? payload.topic.trim() : '';
+  } catch {
+    return '';
+  }
+}
+
 export default class CastService extends PubSubService {
   public static EVENTS = {
     MESSAGE_RECEIVED: 'event::CastService:messageReceived',
@@ -197,16 +234,22 @@ export default class CastService extends PubSubService {
     const { topic: initialTopic, preserveSessionTopicFromToken } =
       this._resolveInitialTopic(castConfig.topic);
 
+    const productName = castConfig.productName ?? 'OHIF';
+    const productVersion = castConfig.productVersion ?? '1.0';
+    const subscriberName =
+      castConfig.subscriberName?.trim() || generateSubscriberName(productName);
+
     const vtkConfig: CastClientConfig = {
       hub: selectedHub,
-      session: {
-        subscriberName: castConfig.subscriberName,
+      session: { 
         actors: ensureIdActor(castConfig.actors),
         topic: initialTopic,
         events: selectedHub.events ?? ['*'],
         lease: selectedHub.lease ?? 999,
+        productName,
+        productVersion,
+        subscriberName,
       },
-      productName: castConfig.productName ?? 'OHIF',
       callbackUrl,
       autoReconnect: castConfig.autoReconnect ?? true,
       preserveSessionTopicFromToken,
@@ -284,82 +327,46 @@ export default class CastService extends PubSubService {
 
   private async _requestFhircastContext(): Promise<void> {
     const sessionConfig = this._client.getSessionConfig();
-    const hubConfig = this._client.getHubConfig();
-    const connectionState = this._client.getConnectionState();
     const subscriber = sessionConfig.subscriberName?.trim() ?? '';
-    const topic = sessionConfig.topic?.trim() ?? '';
-    const token = connectionState.token?.trim() ?? '';
-    const hubEndpoint = hubConfig.hub_endpoint?.trim() ?? '';
-    if (!subscriber || !topic || !token || !hubEndpoint) {
-      console.warn('CastService(vtk): missing values for auto FHIRcastContext GET', {
-        hasSubscriber: Boolean(subscriber),
-        hasTopic: Boolean(topic),
-        hasToken: Boolean(token),
-        hasHubEndpoint: Boolean(hubEndpoint),
-      });
+    if (!subscriber) {
+      console.warn(
+        'CastService(vtk): missing subscriber for FHIRcastContext request'
+      );
       return;
     }
-
-    let getUrl: URL;
-    try {
-      getUrl = new URL(hubEndpoint);
-      getUrl.pathname = `${getUrl.pathname.replace(/\/$/, '')}/request`;
-    } catch (err) {
-      console.error('CastService(vtk): invalid hub endpoint for request', {
-        hubEndpoint,
-        err,
-      });
-      return;
-    }
-
-    const payload = {
-      subscriber,
-      topic,
-      dataType: 'FHIRcastContext',
-      actor: 'WORKLIST_CLIENT',
-    };
 
     try {
       console.info(
-        'CastService(vtk): requesting FHIRcastContext after websocket connected',
-        getUrl.toString(),
-        payload
+        'CastService(vtk): requesting FHIRcastContext after websocket connected'
       );
-      const response = await fetch(getUrl.toString(), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
+      const result = await this._client.request({
+        subscriber,
+        dataType: 'FHIRcastContext',
+        actor: 'WORKLIST_CLIENT',
       });
-      const responseText = await response.text();
-      if (!response.ok) {
+
+      if (!result.ok) {
         console.warn(
           'CastService(vtk): auto FHIRcastContext GET returned non-OK response',
-          response.status,
-          responseText
+          result.status,
+          result.data
         );
-      } else {
-        try {
-          const parsed = JSON.parse(responseText) as {
-            response?: { event?: CastMessage['event'] };
-          };
-          const responseEvent = parsed?.response?.event;
-          if (responseEvent) {
-            this._handleCastResponseEvent(responseEvent);
-          }
-        } catch {
-          // keep compatibility with non-JSON or unexpected hub responses
-        }
-        console.info(
-          'CastService(vtk): auto FHIRcastContext GET accepted',
-          response.status,
-          responseText
-        );
+        return;
+      }
+
+      console.info(
+        'CastService(vtk): auto FHIRcastContext GET accepted',
+        result.status,
+        result.data
+      );
+
+      const responseEvent = (
+        result.data as { response?: { event?: CastMessage['event'] } }
+      )?.response?.event;
+      if (responseEvent) {
+        this._handleCastResponseEvent(responseEvent);
       }
     } catch (err) {
-      // keep subscribe flow resilient if hub GET endpoint is unavailable
       console.error('CastService(vtk): failed to request FHIRcastContext', err);
     }
   }
@@ -395,13 +402,36 @@ export default class CastService extends PubSubService {
     topic: string;
     preserveSessionTopicFromToken: boolean;
   } {
-    const fromUrl =
-      typeof window !== 'undefined'
-        ? new URLSearchParams(window.location.search).get('topic')?.trim() ?? ''
-        : '';
+    const stripCastParamsFromUrl = () => {
+      if (typeof window === 'undefined' || !window.history?.replaceState) {
+        return;
+      }
+      const url = new URL(window.location.href);
+      const hasTopic = url.searchParams.has('topic');
+      const hasCastToken = url.searchParams.has('cast-token');
+      if (!hasTopic && !hasCastToken) {
+        return;
+      }
+      url.searchParams.delete('topic');
+      url.searchParams.delete('cast-token');
+      window.history.replaceState(null, '', url.toString());
+    };
+
+    const searchParams =
+      typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const fromUrl = searchParams?.get('topic')?.trim() ?? '';
     if (fromUrl) {
+      stripCastParamsFromUrl();
       return { topic: fromUrl, preserveSessionTopicFromToken: true };
     }
+
+    const castToken = searchParams?.get('cast-token')?.trim() ?? '';
+    const fromCastToken = castToken ? decodeTopicFromJwt(castToken) : '';
+    if (fromCastToken) {
+      stripCastParamsFromUrl();
+      return { topic: fromCastToken, preserveSessionTopicFromToken: true };
+    }
+
     const fromStorage = this._readStoredTopic();
     if (fromStorage) {
       return { topic: fromStorage, preserveSessionTopicFromToken: true };
@@ -451,7 +481,7 @@ export default class CastService extends PubSubService {
 
   private _handleCastResponse(message: CastMessage): void {
     const event = message.event;
-    if (getHubEventLower(event) !== 'get-response') {
+    if (getHubEventLower(event) !== 'cast-response') {
       return;
     }
     this._handleCastResponseEvent(event);
@@ -459,7 +489,7 @@ export default class CastService extends PubSubService {
 
   private _handleCastRequest(message: CastMessage): void {
     const event = message.event;
-    if (getHubEventLower(event) !== 'get-request') {
+    if (getHubEventLower(event) !== 'cast-request') {
       return;
     }
 
@@ -496,7 +526,7 @@ export default class CastService extends PubSubService {
       return;
     }
 
-    this._client.sendGetResponse(
+    this._client.sendCastRequestResponse(
       requestId,
       {
         'context.type': 'Image',
