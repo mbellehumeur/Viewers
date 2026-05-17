@@ -7,6 +7,10 @@ import vtkCastClient, {
   type HubRuntimeState,
   type SessionConfig,
 } from '@kitware/vtk.js/Sources/IO/Core/CastClient';
+import {
+  isRequestEvent,
+  isResponseEvent,
+} from './event-names';
 
 type ConfigCastHub = HubConfig & {
   events?: string[];
@@ -61,6 +65,12 @@ type ServicesManagerLike = {
   };
 };
 
+type CastAuthorizeResult = {
+  user_name: string;
+  code: string;
+  expires_in?: number;
+};
+
 type CastClientLike = {
   onMessage: (callback: (message: CastMessage) => void) => void;
   onConnectionStateChange: (
@@ -70,24 +80,53 @@ type CastClientLike = {
   getHubConfig: () => HubConfig;
   setTopic: (topic: string) => void;
   setSubscriberName: (subscriberName: string) => void;
-  getToken: () => Promise<boolean>;
+  setUserName?: (userName: string) => void;
+  authenticate: () => Promise<CastAuthorizeResult>;
+  getToken: (code: string) => Promise<boolean>;
   subscribe: () => Promise<number | string>;
   unsubscribe: () => Promise<void>;
   publish: (castMessage: Record<string, unknown>) => Promise<Response | null>;
   getConnectionState: () => HubRuntimeState;
   getSessionConfig: () => SessionConfig;
-  sendCastRequestResponse: (requestId: string, data: unknown, topic?: string) => void;
+  sendCastRequestResponse: (
+    requestId: string,
+    dataType: string,
+    data: unknown,
+    topic?: string
+  ) => void;
   request: (args: {
     subscriber: string;
     topic?: string;
     dataType?: string;
     actor?: string;
+    targetActor?: string;
+    productName?: string;
     endpoint?: string;
   }) => Promise<{ ok: boolean; status: number; data: unknown }>;
 };
 
+/**
+ * One responder's contribution in the new collated cast-request reply
+ * (matches ``CastRequestResponseItem`` from the vtk-js client).
+ */
+type CastRequestResponseItem = {
+  id: string | null;
+  subscriber: string | null;
+  actor: string | null;
+  productName?: string | null;
+  data?: unknown;
+};
+
+type CastRequestEnvelope = {
+  responses?: CastRequestResponseItem[];
+  expected?: string[];
+  missing?: string[];
+  timedOut?: boolean;
+};
+
 const CAST_TOPIC_SESSION_KEY = 'ohif.cast.sessionTopic';
 const ID_ACTOR_KEYWORD = 'ID';
+const DEFAULT_TARGET_ACTOR_KEYWORD = 'EC';
 const SUBSCRIBER_ID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
 function ensureIdActor(actors?: string[]): string[] {
@@ -144,6 +183,17 @@ function extractStudyUIDFromResource(resource: unknown): string {
       identifier.system.toLowerCase() === 'urn:dicom:uid'
   );
   return normalizeStudyUID(dicomUidIdentifier?.value);
+}
+
+function getInboundTargetActorKeyword(message: {
+  targetActor?: unknown;
+  actor?: unknown;
+}): string {
+  const hasTarget =
+    message.targetActor !== undefined &&
+    message.targetActor !== null &&
+    String(message.targetActor).trim() !== '';
+  return getActorKeyword(hasTarget ? message.targetActor : message.actor);
 }
 
 function getActorKeyword(actor: unknown): string {
@@ -241,7 +291,7 @@ export default class CastService extends PubSubService {
 
     const vtkConfig: CastClientConfig = {
       hub: selectedHub,
-      session: { 
+      session: {
         actors: ensureIdActor(castConfig.actors),
         topic: initialTopic,
         events: selectedHub.events ?? ['*'],
@@ -249,6 +299,7 @@ export default class CastService extends PubSubService {
         productName,
         productVersion,
         subscriberName,
+        defaultTargetActor: DEFAULT_TARGET_ACTOR_KEYWORD,
       },
       callbackUrl,
       autoReconnect: castConfig.autoReconnect ?? true,
@@ -269,6 +320,7 @@ export default class CastService extends PubSubService {
       this._handleDicomSend(message);
     });
     this._client.onConnectionStateChange((wsState: string) => {
+      this._updateBrowserTitle(wsState);
       if (wsState === 'connected') {
         void this._requestFhircastContext();
       }
@@ -288,14 +340,45 @@ export default class CastService extends PubSubService {
   public setTopic(topic: string): void {
     this._client.setTopic(topic);
     this._writeStoredTopic(topic);
+    this._updateBrowserTitle();
   }
 
   public setSubscriberName(subscriberName: string): void {
     this._client.setSubscriberName(subscriberName);
   }
 
+  private _updateBrowserTitle(wsState?: string): void {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const topic = this._client.getSessionConfig().topic?.trim() ?? '';
+    const hub = this._client.getHubConfig();
+    const hubLabel = hub.friendlyName?.trim() || hub.name?.trim() || 'Hub';
+    const statusText =
+      wsState === 'connected'
+        ? `${hubLabel} connected`
+        : wsState === 'connecting'
+          ? 'Websocket connecting'
+          : wsState === 'error'
+            ? 'Websocket error'
+            : wsState === 'disconnected'
+              ? 'Websocket disconnected'
+              : 'Ready';
+    document.title = topic
+      ? `${topic} - ${statusText}`
+      : statusText;
+  }
+
+  public async authenticate(): Promise<CastAuthorizeResult> {
+    return this._client.authenticate();
+  }
+
   public async getToken(): Promise<boolean> {
-    return this._client.getToken();
+    const { code } = await this.authenticate();
+    if (!code) {
+      return false;
+    }
+    return this._client.getToken(code);
   }
 
   public async castSubscribe(): Promise<number | string> {
@@ -343,6 +426,7 @@ export default class CastService extends PubSubService {
         subscriber,
         dataType: 'FHIRcastContext',
         actor: 'WORKLIST_CLIENT',
+        targetActor: 'WORKLIST_CLIENT',
       });
 
       if (!result.ok) {
@@ -360,11 +444,35 @@ export default class CastService extends PubSubService {
         result.data
       );
 
-      const responseEvent = (
-        result.data as { response?: { event?: CastMessage['event'] } }
-      )?.response?.event;
-      if (responseEvent) {
-        this._handleCastResponseEvent(responseEvent);
+      // New collated reply: { responses: [{ id, subscriber, actor, productName, data }], ... }
+      // Pick the first response whose data describes an ImagingStudy (or just
+      // the first one if none specifically identify themselves).
+      const envelope =
+        (result.data && typeof result.data === 'object'
+          ? (result.data as CastRequestEnvelope)
+          : undefined) ?? {};
+      const responses = Array.isArray(envelope.responses)
+        ? envelope.responses
+        : [];
+      let chosenData: unknown = undefined;
+      for (const item of responses) {
+        const itemData = item?.data;
+        if (
+          itemData &&
+          typeof itemData === 'object' &&
+          (itemData as { 'context.type'?: unknown })['context.type'] ===
+            'ImagingStudy'
+        ) {
+          chosenData = itemData;
+          break;
+        }
+      }
+      if (chosenData === undefined && responses.length > 0) {
+        chosenData = responses[0]?.data;
+      }
+      if (chosenData !== undefined) {
+        this._openStudyFromContextData(chosenData);
+        return;
       }
     } catch (err) {
       console.error('CastService(vtk): failed to request FHIRcastContext', err);
@@ -398,6 +506,9 @@ export default class CastService extends PubSubService {
     }
   }
 
+  /**
+   * URL topic: `topic` query, or JWT in `id-token` (payload `topic`). `cast-token` is not supported.
+   */
   private _resolveInitialTopic(configTopic?: string): {
     topic: string;
     preserveSessionTopicFromToken: boolean;
@@ -408,12 +519,12 @@ export default class CastService extends PubSubService {
       }
       const url = new URL(window.location.href);
       const hasTopic = url.searchParams.has('topic');
-      const hasCastToken = url.searchParams.has('cast-token');
-      if (!hasTopic && !hasCastToken) {
+      const hasIdToken = url.searchParams.has('id-token');
+      if (!hasTopic && !hasIdToken) {
         return;
       }
       url.searchParams.delete('topic');
-      url.searchParams.delete('cast-token');
+      url.searchParams.delete('id-token');
       window.history.replaceState(null, '', url.toString());
     };
 
@@ -425,11 +536,11 @@ export default class CastService extends PubSubService {
       return { topic: fromUrl, preserveSessionTopicFromToken: true };
     }
 
-    const castToken = searchParams?.get('cast-token')?.trim() ?? '';
-    const fromCastToken = castToken ? decodeTopicFromJwt(castToken) : '';
-    if (fromCastToken) {
+    const idToken = searchParams?.get('id-token')?.trim() ?? '';
+    const fromIdToken = idToken ? decodeTopicFromJwt(idToken) : '';
+    if (fromIdToken) {
       stripCastParamsFromUrl();
-      return { topic: fromCastToken, preserveSessionTopicFromToken: true };
+      return { topic: fromIdToken, preserveSessionTopicFromToken: true };
     }
 
     const fromStorage = this._readStoredTopic();
@@ -481,7 +592,7 @@ export default class CastService extends PubSubService {
 
   private _handleCastResponse(message: CastMessage): void {
     const event = message.event;
-    if (getHubEventLower(event) !== 'cast-response') {
+    if (!isResponseEvent(getHubEventLower(event))) {
       return;
     }
     this._handleCastResponseEvent(event);
@@ -489,7 +600,7 @@ export default class CastService extends PubSubService {
 
   private _handleCastRequest(message: CastMessage): void {
     const event = message.event;
-    if (getHubEventLower(event) !== 'cast-request') {
+    if (!isRequestEvent(getHubEventLower(event))) {
       return;
     }
 
@@ -510,8 +621,14 @@ export default class CastService extends PubSubService {
       return;
     }
 
-    const actorKeyword = getActorKeyword((message as { actor?: unknown }).actor);
-    if (actorKeyword !== ID_ACTOR_KEYWORD) {
+    const targetKeyword = getInboundTargetActorKeyword(
+      message as { targetActor?: unknown; actor?: unknown }
+    );
+    if (
+      targetKeyword &&
+      targetKeyword !== '*' &&
+      targetKeyword !== ID_ACTOR_KEYWORD
+    ) {
       return;
     }
 
@@ -528,6 +645,10 @@ export default class CastService extends PubSubService {
 
     this._client.sendCastRequestResponse(
       requestId,
+      // Use the original (case-preserving) dataType from the request so the
+      // emitted hub.event is e.g. ``pngfullsize-response`` (lowercased rule
+      // is applied inside sendCastRequestResponse).
+      dataType,
       {
         'context.type': 'Image',
         context: [
