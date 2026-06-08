@@ -40,6 +40,7 @@ import PinFill from './Sources/PinFill';
 import Plus from './Sources/Plus';
 import PowerOff from './Sources/PowerOff';
 import Redo from './Sources/Redo';
+import Radio from './Sources/Radio';
 import Refresh from './Sources/Refresh';
 import Rename from './Sources/Rename';
 import Series from './Sources/Series';
@@ -511,6 +512,7 @@ export const Icons = {
   PinFill,
   Plus,
   PowerOff,
+  Radio,
   Refresh,
   Rename,
   Series,

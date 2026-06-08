@@ -1,7 +1,7 @@
 import { Types, DicomMetadataStore, utils } from '@ohif/core';
 import dcmjs from 'dcmjs';
 
-const { downloadBlob } = utils;
+const { downloadBlob, downloadDicom } = utils;
 
 import { ContextMenuController } from './CustomizableContextMenu';
 import DicomTagBrowser from './DicomTagBrowser/DicomTagBrowser';
@@ -832,6 +832,393 @@ const commandsModule = ({
         }
       };
     },
+    /**
+     * Downloads all DICOM instances for a series as local .dcm files.
+     * Requires DICOMweb retrieveInstance access on the active datasource.
+     */
+    downloadSeriesDicomFiles: async ({ StudyInstanceUID, displaySetInstanceUID }) => {
+      const notificationId = 'download-series-dicom';
+      const errorNotificationOptions = {
+        id: `${notificationId}-error`,
+        allowDuplicates: false,
+        deduplicationInterval: 5 * 60 * 1000,
+      };
+      if (!displaySetInstanceUID) {
+        uiNotificationService.show({
+          title: 'Download Series DICOM',
+          message: 'Missing displaySetInstanceUID.',
+          type: 'error',
+          duration: 3000,
+          ...errorNotificationOptions,
+        });
+        return;
+      }
+
+      const [activeDataSource] = extensionManager.getActiveDataSource();
+      const wadoClient = activeDataSource?.retrieve?.getWadoDicomWebClient?.();
+      if (!wadoClient) {
+        uiNotificationService.show({
+          title: 'Download Series DICOM',
+          message: 'Active datasource does not expose a WADO DICOMweb client.',
+          type: 'error',
+          duration: 4000,
+          ...errorNotificationOptions,
+        });
+        return;
+      }
+
+      const displaySet = displaySetService.getDisplaySetByUID(displaySetInstanceUID);
+      const studyInstanceUID = StudyInstanceUID || displaySet?.StudyInstanceUID;
+      const seriesInstanceUID = displaySet?.SeriesInstanceUID;
+      if (!studyInstanceUID || !seriesInstanceUID) {
+        uiNotificationService.show({
+          title: 'Download Series DICOM',
+          message: 'Could not determine Study/Series Instance UID for selected display set.',
+          type: 'error',
+          duration: 4000,
+          ...errorNotificationOptions,
+        });
+        return;
+      }
+
+      const getSopUID = metadata => {
+        if (!metadata || typeof metadata !== 'object') {
+          return null;
+        }
+        const naturalized = metadata.SOPInstanceUID;
+        if (typeof naturalized === 'string' && naturalized.length) {
+          return naturalized;
+        }
+        const dicomJson = metadata['00080018']?.Value?.[0];
+        return typeof dicomJson === 'string' && dicomJson.length ? dicomJson : null;
+      };
+
+      const textEncoder = new TextEncoder();
+      const findSequence = (buffer: Uint8Array, pattern: Uint8Array, fromIndex = 0) => {
+        for (let i = fromIndex; i <= buffer.length - pattern.length; i++) {
+          let found = true;
+          for (let j = 0; j < pattern.length; j++) {
+            if (buffer[i + j] !== pattern[j]) {
+              found = false;
+              break;
+            }
+          }
+          if (found) {
+            return i;
+          }
+        }
+        return -1;
+      };
+
+      const extractFirstMultipartPart = (responseBuffer, contentType) => {
+        const boundaryMatch = /boundary="?([^";]+)"?/i.exec(contentType || '');
+        if (!boundaryMatch?.[1]) {
+          return null;
+        }
+        const boundary = `--${boundaryMatch[1]}`;
+        const boundaryBytes = textEncoder.encode(boundary);
+        const data = new Uint8Array(responseBuffer);
+
+        const firstBoundary = findSequence(data, boundaryBytes);
+        if (firstBoundary < 0) {
+          return null;
+        }
+
+        const headerSeparator = textEncoder.encode('\r\n\r\n');
+        const headersStart = firstBoundary + boundaryBytes.length;
+        const bodyStart = findSequence(data, headerSeparator, headersStart);
+        if (bodyStart < 0) {
+          return null;
+        }
+        const payloadStart = bodyStart + headerSeparator.length;
+
+        const nextBoundaryPrefix = textEncoder.encode(`\r\n${boundary}`);
+        const payloadEnd = findSequence(data, nextBoundaryPrefix, payloadStart);
+        if (payloadEnd < 0) {
+          return null;
+        }
+
+        return data.slice(payloadStart, payloadEnd).buffer;
+      };
+
+      const fetchDicomInstancePart10 = async (client, uids) => {
+        const baseUrl = `${client.wadoURL}/studies/${encodeURIComponent(
+          uids.studyInstanceUID
+        )}/series/${encodeURIComponent(uids.seriesInstanceUID)}/instances/${encodeURIComponent(
+          uids.sopInstanceUID
+        )}`;
+
+        const headers = new Headers(client.headers || {});
+        headers.set('Accept', 'multipart/related');
+        const response = await fetch(baseUrl, {
+          method: 'GET',
+          headers,
+        });
+        if (!response.ok) {
+          throw new Error(`retrieveInstance failed (${response.status})`);
+        }
+        const responseBuffer = await response.arrayBuffer();
+        const contentType = response.headers.get('content-type') || '';
+        if (!/multipart\/related/i.test(contentType)) {
+          return responseBuffer;
+        }
+        return extractFirstMultipartPart(responseBuffer, contentType) || responseBuffer;
+      };
+
+      try {
+        uiNotificationService.show({
+          title: 'Download Series DICOM',
+          message: 'Preparing DICOM downloads...',
+          type: 'info',
+          duration: 1500,
+          id: `${notificationId}-info`,
+        });
+
+        const seriesMetadata = await wadoClient.retrieveSeriesMetadata({
+          studyInstanceUID,
+          seriesInstanceUID,
+        });
+
+        const sopInstanceUIDs = (seriesMetadata || [])
+          .map(getSopUID)
+          .filter(uid => typeof uid === 'string' && uid.length);
+
+        if (!sopInstanceUIDs.length) {
+          throw new Error('No instances found for the selected series.');
+        }
+
+        let downloadedCount = 0;
+        for (const sopInstanceUID of sopInstanceUIDs) {
+          const arrayBuffer = await fetchDicomInstancePart10(wadoClient, {
+            studyInstanceUID,
+            seriesInstanceUID,
+            sopInstanceUID,
+          });
+          if (!arrayBuffer) {
+            throw new Error(`Unexpected payload for instance ${sopInstanceUID}`);
+          }
+          downloadDicom(arrayBuffer, { filename: `${sopInstanceUID}.dcm` });
+          downloadedCount += 1;
+        }
+
+        uiNotificationService.show({
+          title: 'Download Series DICOM',
+          message: `Started download for ${downloadedCount} DICOM files.`,
+          type: 'success',
+          duration: 3000,
+          id: `${notificationId}-success`,
+        });
+      } catch (error) {
+        console.error('downloadSeriesDicomFiles failed', error);
+        uiNotificationService.show({
+          title: 'Download Series DICOM',
+          message: 'Failed to download DICOM files for this series.',
+          type: 'error',
+          duration: 4000,
+          ...errorNotificationOptions,
+        });
+      }
+    },
+    /**
+     * Downloads first frame payload for each instance in a series.
+     * Useful for datasources that allow /frames/{n} but block full instance retrieval.
+     */
+    downloadSeriesFrameData: async ({ StudyInstanceUID, displaySetInstanceUID }) => {
+      const notificationId = 'download-series-frames';
+      const errorNotificationOptions = {
+        id: `${notificationId}-error`,
+        allowDuplicates: false,
+        deduplicationInterval: 5 * 60 * 1000,
+      };
+
+      if (!displaySetInstanceUID) {
+        uiNotificationService.show({
+          title: 'Download Frame Data',
+          message: 'Missing displaySetInstanceUID.',
+          type: 'error',
+          duration: 3000,
+          ...errorNotificationOptions,
+        });
+        return;
+      }
+
+      const [activeDataSource] = extensionManager.getActiveDataSource();
+      const wadoClient = activeDataSource?.retrieve?.getWadoDicomWebClient?.();
+      if (!wadoClient) {
+        uiNotificationService.show({
+          title: 'Download Frame Data',
+          message: 'Active datasource does not expose a WADO DICOMweb client.',
+          type: 'error',
+          duration: 4000,
+          ...errorNotificationOptions,
+        });
+        return;
+      }
+
+      const displaySet = displaySetService.getDisplaySetByUID(displaySetInstanceUID);
+      const studyInstanceUID = StudyInstanceUID || displaySet?.StudyInstanceUID;
+      const seriesInstanceUID = displaySet?.SeriesInstanceUID;
+      if (!studyInstanceUID || !seriesInstanceUID) {
+        uiNotificationService.show({
+          title: 'Download Frame Data',
+          message: 'Could not determine Study/Series Instance UID for selected display set.',
+          type: 'error',
+          duration: 4000,
+          ...errorNotificationOptions,
+        });
+        return;
+      }
+
+      const getSopUID = metadata => {
+        if (!metadata || typeof metadata !== 'object') {
+          return null;
+        }
+        const naturalized = metadata.SOPInstanceUID;
+        if (typeof naturalized === 'string' && naturalized.length) {
+          return naturalized;
+        }
+        const dicomJson = metadata['00080018']?.Value?.[0];
+        return typeof dicomJson === 'string' && dicomJson.length ? dicomJson : null;
+      };
+
+      const textEncoder = new TextEncoder();
+      const findSequence = (buffer: Uint8Array, pattern: Uint8Array, fromIndex = 0) => {
+        for (let i = fromIndex; i <= buffer.length - pattern.length; i++) {
+          let found = true;
+          for (let j = 0; j < pattern.length; j++) {
+            if (buffer[i + j] !== pattern[j]) {
+              found = false;
+              break;
+            }
+          }
+          if (found) {
+            return i;
+          }
+        }
+        return -1;
+      };
+
+      const extractFirstMultipartPart = (responseBuffer, contentType) => {
+        const boundaryMatch = /boundary="?([^";]+)"?/i.exec(contentType || '');
+        if (!boundaryMatch?.[1]) {
+          return null;
+        }
+        const boundary = `--${boundaryMatch[1]}`;
+        const boundaryBytes = textEncoder.encode(boundary);
+        const data = new Uint8Array(responseBuffer);
+
+        const firstBoundary = findSequence(data, boundaryBytes);
+        if (firstBoundary < 0) {
+          return null;
+        }
+
+        const headerSeparator = textEncoder.encode('\r\n\r\n');
+        const headersStart = firstBoundary + boundaryBytes.length;
+        const bodyStart = findSequence(data, headerSeparator, headersStart);
+        if (bodyStart < 0) {
+          return null;
+        }
+        const payloadStart = bodyStart + headerSeparator.length;
+
+        const nextBoundaryPrefix = textEncoder.encode(`\r\n${boundary}`);
+        const payloadEnd = findSequence(data, nextBoundaryPrefix, payloadStart);
+        if (payloadEnd < 0) {
+          return null;
+        }
+        return data.slice(payloadStart, payloadEnd).buffer;
+      };
+
+      const detectFrameMimeAndExt = buffer => {
+        const bytes = new Uint8Array(buffer);
+        const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+        if (isJpeg) return { mime: 'image/jpeg', ext: 'jpg' };
+        const isPng =
+          bytes.length >= 8 &&
+          bytes[0] === 0x89 &&
+          bytes[1] === 0x50 &&
+          bytes[2] === 0x4e &&
+          bytes[3] === 0x47 &&
+          bytes[4] === 0x0d &&
+          bytes[5] === 0x0a &&
+          bytes[6] === 0x1a &&
+          bytes[7] === 0x0a;
+        if (isPng) return { mime: 'image/png', ext: 'png' };
+        return { mime: 'application/octet-stream', ext: 'bin' };
+      };
+
+      const fetchInstanceFrame = async (client, uids) => {
+        const url = `${client.wadoURL}/studies/${encodeURIComponent(
+          uids.studyInstanceUID
+        )}/series/${encodeURIComponent(uids.seriesInstanceUID)}/instances/${encodeURIComponent(
+          uids.sopInstanceUID
+        )}/frames/1`;
+
+        const headers = new Headers(client.headers || {});
+        headers.set('Accept', 'multipart/related; type=application/octet-stream; transfer-syntax=*');
+        const response = await fetch(url, { method: 'GET', headers });
+        if (!response.ok) {
+          throw new Error(`retrieveInstanceFrames failed (${response.status})`);
+        }
+        const responseBuffer = await response.arrayBuffer();
+        const contentType = response.headers.get('content-type') || '';
+        if (!/multipart\/related/i.test(contentType)) {
+          return responseBuffer;
+        }
+        return extractFirstMultipartPart(responseBuffer, contentType) || responseBuffer;
+      };
+
+      try {
+        uiNotificationService.show({
+          title: 'Download Frame Data',
+          message: 'Preparing frame downloads...',
+          type: 'info',
+          duration: 1500,
+          id: `${notificationId}-info`,
+        });
+
+        const seriesMetadata = await wadoClient.retrieveSeriesMetadata({
+          studyInstanceUID,
+          seriesInstanceUID,
+        });
+        const sopInstanceUIDs = (seriesMetadata || [])
+          .map(getSopUID)
+          .filter(uid => typeof uid === 'string' && uid.length);
+        if (!sopInstanceUIDs.length) {
+          throw new Error('No instances found for the selected series.');
+        }
+
+        let downloadedCount = 0;
+        for (const sopInstanceUID of sopInstanceUIDs) {
+          const frameBuffer = await fetchInstanceFrame(wadoClient, {
+            studyInstanceUID,
+            seriesInstanceUID,
+            sopInstanceUID,
+          });
+          const { mime, ext } = detectFrameMimeAndExt(frameBuffer);
+          downloadBlob(new Blob([frameBuffer], { type: mime }), {
+            filename: `${sopInstanceUID}.frame1.${ext}`,
+          });
+          downloadedCount += 1;
+        }
+
+        uiNotificationService.show({
+          title: 'Download Frame Data',
+          message: `Started download for ${downloadedCount} frame files.`,
+          type: 'success',
+          duration: 3000,
+          id: `${notificationId}-success`,
+        });
+      } catch (error) {
+        console.error('downloadSeriesFrameData failed', error);
+        uiNotificationService.show({
+          title: 'Download Frame Data',
+          message: 'Failed to download frame data for this series.',
+          type: 'error',
+          duration: 4000,
+          ...errorNotificationOptions,
+        });
+      }
+    },
   };
 
   const definitions = {
@@ -861,6 +1248,8 @@ const commandsModule = ({
     addDisplaySetAsLayer: actions.addDisplaySetAsLayer,
     removeDisplaySetLayer: actions.removeDisplaySetLayer,
     createStoreFunction: actions.createStoreFunction,
+    downloadSeriesDicomFiles: actions.downloadSeriesDicomFiles,
+    downloadSeriesFrameData: actions.downloadSeriesFrameData,
   };
 
   return {

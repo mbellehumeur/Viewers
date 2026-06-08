@@ -31,6 +31,7 @@ interface HeaderProps {
   PatientInfo?: ReactNode;
   Secondary?: ReactNode;
   UndoRedo?: ReactNode;
+  PreSettings?: ReactNode;
 }
 
 function Header({
@@ -43,6 +44,7 @@ function Header({
   PatientInfo,
   UndoRedo,
   Secondary,
+  PreSettings,
   ...props
 }: HeaderProps): ReactNode {
   const onClickReturn = () => {
@@ -85,6 +87,9 @@ function Header({
             <div className="border-muted mx-1.5 h-[25px] border-r"></div>
             {PatientInfo}
             <div className="border-muted mx-1.5 h-[25px] border-r"></div>
+            {PreSettings ? (
+              <div className="mt-2 flex flex-shrink-0 items-center">{PreSettings}</div>
+            ) : null}
             <div className="flex-shrink-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -286,6 +286,7 @@ export const basicLayout = {
   id: ohif.layout,
   props: {
     leftPanels: [ohif.thumbnailList],
+    leftPanelClosed: true,
     leftPanelResizable: true,
     rightPanels: [cornerstone.segmentation, cornerstone.measurements],
     rightPanelClosed: true,

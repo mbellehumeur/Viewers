@@ -28,11 +28,18 @@ function ViewerLayout({
   rightPanelInitialExpandedWidth,
   leftPanelMinimumExpandedWidth,
   rightPanelMinimumExpandedWidth,
+  showLoadingIndicator: showLoadingIndicatorProp,
+  studyInstanceUIDs = [],
 }: withAppTypes): React.FunctionComponent {
   const [appConfig] = useAppConfig();
 
   const { panelService, hangingProtocolService, customizationService } = servicesManager.services;
-  const [showLoadingIndicator, setShowLoadingIndicator] = useState(appConfig.showLoadingIndicator);
+  const loadingIndicatorEnabled =
+    showLoadingIndicatorProp !== undefined
+      ? showLoadingIndicatorProp
+      : appConfig.showLoadingIndicator;
+  const [showLoadingIndicator, setShowLoadingIndicator] = useState(loadingIndicatorEnabled);
+  const studyLoadKey = studyInstanceUIDs.join('|');
 
   const hasPanels = useCallback(
     (side): boolean => !!panelService.getPanels(side).length,
@@ -87,6 +94,17 @@ function ViewerLayout({
       document.body.classList.remove('overflow-hidden');
     };
   }, []);
+
+  useEffect(() => {
+    setShowLoadingIndicator(loadingIndicatorEnabled);
+  }, [loadingIndicatorEnabled]);
+
+  useEffect(() => {
+    if (!studyLoadKey || !loadingIndicatorEnabled) {
+      return;
+    }
+    setShowLoadingIndicator(true);
+  }, [studyLoadKey, loadingIndicatorEnabled]);
 
   const getComponent = id => {
     const entry = extensionManager.getModuleEntry(id);
@@ -238,6 +256,7 @@ ViewerLayout.propTypes = {
   /** Responsible for rendering our grid of viewports; provided by consuming application */
   children: PropTypes.oneOfType([PropTypes.node, PropTypes.func]).isRequired,
   viewports: PropTypes.array,
+  studyInstanceUIDs: PropTypes.arrayOf(PropTypes.string),
 };
 
 export default ViewerLayout;

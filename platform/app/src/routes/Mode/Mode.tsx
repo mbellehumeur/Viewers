@@ -14,6 +14,17 @@ import { updateAuthServiceAndCleanUrl } from './updateAuthServiceAndCleanUrl';
 
 const { getSplitParam } = utils;
 
+/** Cast hub: show viewer layout at /viewer with no StudyInstanceUIDs. */
+function isCastEmptyViewerRoute(appConfig, studyInstanceUIDs) {
+  if (!appConfig?.cast) {
+    return false;
+  }
+  if (studyInstanceUIDs === null) {
+    return false;
+  }
+  return !studyInstanceUIDs.length;
+}
+
 export default function ModeRoute({
   mode,
   dataSourceName,
@@ -72,6 +83,7 @@ export default function ModeRoute({
   const runTimeHangingProtocolId = lowerCaseSearchParams.get('hangingprotocolid');
   const runTimeStageId = lowerCaseSearchParams.get('stageid');
   const token = lowerCaseSearchParams.get('token');
+  const castEmptyViewer = isCastEmptyViewerRoute(appConfig, studyInstanceUIDs);
 
   if (token) {
     updateAuthServiceAndCleanUrl(token, location, userAuthenticationService);
@@ -166,15 +178,15 @@ export default function ModeRoute({
   }, [studyInstanceUIDs, ExtensionDependenciesLoaded, dataSource, navigate]);
 
   useEffect(() => {
-    if (!ExtensionDependenciesLoaded || !studyInstanceUIDs?.length) {
+    if (!ExtensionDependenciesLoaded || !route) {
       return;
     }
 
-    const retrieveLayoutData = async () => {
+    const retrieveLayoutData = async uids => {
       const layoutData = await route.layoutTemplate({
         location,
         servicesManager,
-        studyInstanceUIDs,
+        studyInstanceUIDs: uids,
       });
 
       if (isMounted.current) {
@@ -191,16 +203,22 @@ export default function ModeRoute({
         setRefresh(!refresh);
       }
     };
+
     if (Array.isArray(studyInstanceUIDs) && studyInstanceUIDs[0]) {
-      retrieveLayoutData();
+      retrieveLayoutData(studyInstanceUIDs);
+    } else if (castEmptyViewer) {
+      retrieveLayoutData([]);
     }
     return () => {
       layoutTemplateData.current = null;
     };
-  }, [studyInstanceUIDs, ExtensionDependenciesLoaded]);
+  }, [studyInstanceUIDs, ExtensionDependenciesLoaded, castEmptyViewer]);
 
   useEffect(() => {
-    if (!layoutTemplateData.current || !ExtensionDependenciesLoaded || !studyInstanceUIDs?.length) {
+    if (!layoutTemplateData.current || !ExtensionDependenciesLoaded) {
+      return;
+    }
+    if (!studyInstanceUIDs?.length && !castEmptyViewer) {
       return;
     }
 
@@ -282,6 +300,10 @@ export default function ModeRoute({
 
       let unsubs;
 
+      if (!studyInstanceUIDs?.length) {
+        return [];
+      }
+
       if (route.init) {
         unsubs = await route.init(
           {
@@ -359,9 +381,16 @@ export default function ModeRoute({
     hotkeysManager,
     studyInstanceUIDs,
     refresh,
+    castEmptyViewer,
   ]);
 
-  if (!studyInstanceUIDs || !layoutTemplateData.current || !ExtensionDependenciesLoaded) {
+  if (!ExtensionDependenciesLoaded || !layoutTemplateData.current) {
+    return null;
+  }
+  if (studyInstanceUIDs === null) {
+    return null;
+  }
+  if (!studyInstanceUIDs.length && !castEmptyViewer) {
     return null;
   }
 
@@ -387,10 +416,16 @@ export default function ModeRoute({
   const LayoutComponent = getLayoutComponent({
     ...layoutTemplateData.current.props,
     ViewportGridComp: ViewportGridWithDataSource,
+    studyInstanceUIDs,
+    showLoadingIndicator: castEmptyViewer
+      ? false
+      : appConfig.showLoadingIndicator !== false,
   });
 
+  const studyUidsForProvider = studyInstanceUIDs.length ? studyInstanceUIDs : [];
+
   return (
-    <ImageViewerProvider StudyInstanceUIDs={studyInstanceUIDs}>
+    <ImageViewerProvider StudyInstanceUIDs={studyUidsForProvider}>
       {CombinedExtensionsContextProvider ? (
         <CombinedExtensionsContextProvider>
           <DragAndDropProvider>{LayoutComponent}</DragAndDropProvider>

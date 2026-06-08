@@ -22,7 +22,13 @@
     "@ohif/core": "3.13.0-beta.43"
   },
   "dependencies": {
+    "@ohif/extension-default": "3.13.0-beta.43",
     "@babel/runtime": "7.28.2",
-    "dcmjs": "0.49.4"
+    "@cornerstonejs/core": "4.20.0",
+    "@cornerstonejs/dicom-image-loader": "4.20.0",
+    "@cornerstonejs/nifti-volume-loader": "4.20.0",
+    "@kitware/vtk.js": "file:../../../vtk-js/dist/esm",
+    "dcmjs": "0.49.4",
+    "jszip": "3.10.1"
   }
 }

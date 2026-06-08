@@ -6,7 +6,7 @@ window.config = {
     // whiteLabeling: {},
     extensions: [],
     modes: [],
-  
+
     /**
      * Routes (see platform/app/src/routes/index.tsx + appInit.js):
      * - showStudyList: false -> '/' is an empty home (header only); study list is at studyListPath.
@@ -34,9 +34,9 @@ window.config = {
     showErrorDetails: 'always', // 'always', 'dev', 'production'
     // filterQueryParam: false,
     measurementTrackingMode: 'simplified',
-  
+
     cast: {
-      defaultHubName: 'VOLVIEW-HUB-CLOUD',
+      defaultHubName: 'SLICER-HUB-CLOUD',
 
       hubs: [
         {
@@ -51,13 +51,15 @@ window.config = {
             'annotation-update',
             'annotation-delete',
             'dicom-send',
+            'nifti-send',
+            'sceneview-request',
           ],
           lease: 999,
-          hub_endpoint: 'https://cast-hub-g6abetanhjesb6cx.westeurope-01.azurewebsites.net/api/hub',
+          hub_endpoint: 'https://slicerhub-azejffgnb7dve8es.canadaeast-01.azurewebsites.net/api/hub',
           authorization_endpoint:
-            'https://cast-hub-g6abetanhjesb6cx.westeurope-01.azurewebsites.net/oauth/authorize',
+            'https://slicerhub-azejffgnb7dve8es.canadaeast-01.azurewebsites.net/oauth/authorize',
           token_endpoint:
-            'https://cast-hub-g6abetanhjesb6cx.westeurope-01.azurewebsites.net/oauth/token',
+            'https://slicerhub-azejffgnb7dve8es.canadaeast-01.azurewebsites.net/oauth/token',
         },
         {
           name: 'SLICER-HUB',
@@ -71,11 +73,13 @@ window.config = {
             'annotation-update',
             'annotation-delete',
             'dicom-send',
+            'nifti-send',
+            'sceneview-request',
           ],
           lease: 999,
-          hub_endpoint: 'http://localhost:2017/api/hub',
-          authorization_endpoint: 'http://localhost:2017/oauth/authorize',
-          token_endpoint: 'http://localhost:2017/oauth/token',
+          hub_endpoint: 'http://127.0.0.1:2018/api/hub',
+          authorization_endpoint: 'http://127.0.0.1:2018/oauth/authorize',
+          token_endpoint: 'http://127.0.0.1:2018/oauth/token',
         },
         {
           name: 'VOLVIEW-HUB',
@@ -89,11 +93,13 @@ window.config = {
             'annotation-update',
             'annotation-delete',
             'dicom-send',
+            'nifti-send',
+            'sceneview-request',
           ],
           lease: 999,
-          hub_endpoint: 'http://localhost:4014/api/hub',
-          authorization_endpoint: 'http://localhost:4014/oauth/authorize',
-          token_endpoint: 'http://localhost:4014/oauth/token',
+          hub_endpoint: 'http://127.0.0.1:4014/api/hub',
+          authorization_endpoint: 'http://127.0.0.1:4014/oauth/authorize',
+          token_endpoint: 'http://127.0.0.1:4014/oauth/token',
         },
         {
           name: 'VOLVIEW-HUB-CLOUD',
@@ -107,6 +113,8 @@ window.config = {
             'annotation-update',
             'annotation-delete',
             'dicom-send',
+            'nifti-send',
+            'sceneview-request',
           ],
           lease: 999,
           hub_endpoint: 'https://volview-server-with-hub-g2d9hcc5esahgxe8.westeurope-01.azurewebsites.net/api/hub',
@@ -114,8 +122,13 @@ window.config = {
           token_endpoint: 'https://volview-server-with-hub-g2d9hcc5esahgxe8.westeurope-01.azurewebsites.net/oauth/token',
         }
       ],
+      productName: 'OHIF',
+      productVersion: '1.0',
+      autoSelectHub: true,
+      autoReconnect: true,
+      actors: ['ID'],
     },
-  
+
     // Defines multi-monitor layouts
     multimonitor: [
       {
@@ -147,7 +160,7 @@ window.config = {
           },
         ],
       },
-  
+
       {
         id: '2',
         test: ({ multimonitor }) => multimonitor === '2',
@@ -177,7 +190,7 @@ window.config = {
         ],
       },
     ],
-    defaultDataSourceName: 'ohif',
+    defaultDataSourceName: 'dicomlocal',
     /* Dynamic config allows user to pass "configUrl" query string this allows to load config without recompiling application. The regex will ensure valid configuration source */
     // dangerouslyUseDynamicConfig: {
     //   enabled: true,
@@ -217,7 +230,7 @@ window.config = {
           omitQuotationForMultipartRequest: true,
         },
       },
-  
+
       {
         namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
         sourceName: 'ohif2',
@@ -274,7 +287,7 @@ window.config = {
           omitQuotationForMultipartRequest: true,
         },
       },
-  
+
       {
         namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
         sourceName: 'local5000',
@@ -333,7 +346,7 @@ window.config = {
           },
         },
       },
-  
+
       {
         namespace: '@ohif/extension-default.dataSourcesModule.dicomwebproxy',
         sourceName: 'dicomwebproxy',
@@ -357,15 +370,23 @@ window.config = {
           friendlyName: 'dicom local',
         },
       },
+      {
+        namespace: '@ohif/extension-cast.dataSourcesModule.idc-direct',
+        sourceName: 'idc',
+        configuration: {
+          friendlyName: 'IDC direct download',
+          name: 'idc',
+        },
+      },
     ],
     httpErrorHandler: error => {
       // This is 429 when rejected from the public idc sandbox too often.
       console.warn(error.status);
-  
+
       // Could use services manager here to bring up a dialog/modal if needed.
       console.warn('test, navigate to https://ohif.org/');
     },
-  
+
     customizationService: [
       {
         'viewportOverlay.topRight': {
@@ -376,7 +397,6 @@ window.config = {
         },
       },
     ],
-  
+
     investigationalUseDialog: { option: 'never' },
   };
-  

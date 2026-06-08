@@ -90,7 +90,7 @@ const defaultProtocol = {
             // This will specify the initial image options index if it matches in the URL
             // and will otherwise not specify anything.
             initialImageOptions: {
-              custom: 'sopInstanceLocation',
+              preset: 'middle', // custom: 'sopInstanceLocation',
             },
             // Other options for initialImageOptions, which can be included in the default
             // custom attribute, or can be provided directly.

@@ -17,6 +17,18 @@ export default {
       iconName: 'ViewportViews',
       commands: 'addDisplaySetAsLayer',
     },
+    {
+      id: 'downloadSeriesDicomFiles',
+      label: 'Download Series DICOM',
+      iconName: 'Download',
+      commands: 'downloadSeriesDicomFiles',
+    },
+    {
+      id: 'downloadSeriesFrameData',
+      label: 'Download Frame Data',
+      iconName: 'Download',
+      commands: 'downloadSeriesFrameData',
+    },
   ],
   'studyBrowser.sortFunctions': [
     {

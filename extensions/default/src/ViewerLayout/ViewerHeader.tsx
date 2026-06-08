@@ -47,6 +47,12 @@ function ViewerHeader({ appConfig }: withAppTypes<{ appConfig: AppTypes.Config }
     'ohif.userPreferencesModal'
   ) as Types.MenuComponentCustomization;
 
+  const CastHeaderStatus = appConfig.cast
+    ? (customizationService.getCustomization('ohif.castHeaderStatus') as
+        | React.ComponentType
+        | undefined)
+    : undefined;
+
   const menuOptions = [
     {
       title: AboutModal?.menuTitle ?? t('Header:About'),
@@ -96,6 +102,7 @@ function ViewerHeader({ appConfig }: withAppTypes<{ appConfig: AppTypes.Config }
           />
         )
       }
+      PreSettings={CastHeaderStatus ? <CastHeaderStatus /> : null}
       UndoRedo={
         <div className="text-primary flex cursor-pointer items-center">
           <Button

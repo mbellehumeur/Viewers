@@ -139,6 +139,7 @@
     ]
   },
   "resolutions": {
+    "@kitware/vtk.js": "file:../vtk-js/dist/esm",
     "commander": "8.3.0",
     "cross-env": "7.0.3",
     "cross-spawn": "7.0.6",
