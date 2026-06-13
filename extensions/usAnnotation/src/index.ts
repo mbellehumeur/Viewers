@@ -2,6 +2,9 @@ import { id } from './id';
 import getPanelModule from './getPanelModule';
 import getCommandsModule from './getCommandsModule';
 import { showPercentage, setShowPercentage } from './PleuraBlinePercentage';
+import { Icons } from '@ohif/ui-next';
+import TabUltrasound from './icons/TabUltrasound';
+
 /**
  * You can remove any of the following modules if you don't need them.
  */
@@ -11,6 +14,9 @@ export default {
    * You ID can be anything you want, but it should be unique.
    */
   id,
+  preRegistration() {
+    Icons.addIcon('tab-ultrasound', TabUltrasound);
+  },
   /**
    * PanelModule should provide a list of panels that will be available in OHIF
    * for Modes to consume and render. Each panel is defined by a {name,

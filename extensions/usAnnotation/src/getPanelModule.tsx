@@ -20,7 +20,7 @@ const getPanelModule = ({ commandsManager, servicesManager, extensionManager }: 
   return [
     {
       name: 'USAnnotationPanel',
-      iconName: 'tab-linear',
+      iconName: 'tab-ultrasound',
       iconLabel: 'US Annotation',
       label: 'USAnnotation',
       component: wrappedUSAnnotationPanel,

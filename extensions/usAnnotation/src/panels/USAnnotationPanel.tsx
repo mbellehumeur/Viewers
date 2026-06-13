@@ -11,7 +11,6 @@ import {
   /* Controls */
   Button,
   Icons,
-  Switch,
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -51,7 +50,6 @@ export default function USAnnotationPanel() {
 
   // UI state variables
   const [depthGuide, setDepthGuide] = useState(true);
-  const [showPleuraPct, setShowPleuraPct] = useState(true);
   const [showOverlay, setShowOverlay] = useState(true);
   const [rater, setRater] = useState('');
 
@@ -97,22 +95,16 @@ export default function USAnnotationPanel() {
     commandsManager.runCommand('setDepthGuide', { value });
     setDepthGuide(value);
   };
-  /**
-   * Sets whether to show the pleura percentage in the viewport overlay
-   * @param value - Boolean indicating whether to show the percentage
-   */
-  const setShowPleuraPercentageCommand = (value: boolean) => {
-    commandsManager.runCommand('setShowPleuraPercentage', { value });
-    setShowPleuraPct(value);
-  };
   const setShowOverlayCommand = (value: boolean) => {
     commandsManager.runCommand('setDisplayFanAnnotation', { value });
     commandsManager.runCommand('setShowPleuraPercentage', { value });
     setShowOverlay(value);
-    setShowPleuraPct(value);
   };
   const toggleShowOverlay = () => {
     setShowOverlayCommand(!showOverlay);
+  };
+  const toggleDepthGuide = () => {
+    setDepthGuideCommand(!depthGuide);
   };
   /**
    * Downloads the annotations as a JSON file
@@ -154,44 +146,6 @@ export default function USAnnotationPanel() {
     </PanelSection.Content>
   );
 
-  const renderSettingsToggles = () => (
-    <PanelSection.Content>
-      <div className="text-foreground space-y-3 p-2 text-sm">
-        <div className="flex items-center">
-          <Switch
-            id="depth-guide-switch"
-            className="mr-3"
-            checked={depthGuide}
-            onCheckedChange={() => setDepthGuideCommand(!depthGuide)}
-          />
-          <label
-            htmlFor="depth-guide-switch"
-            className="cursor-pointer"
-            onClick={() => setDepthGuideCommand(!depthGuide)}
-          >
-            {t('Depth guide toggle')}
-          </label>
-        </div>
-
-        <div className="flex items-center">
-          <Switch
-            id="pleura-percentage-switch"
-            className="mr-3"
-            checked={showPleuraPct}
-            onCheckedChange={() => setShowPleuraPercentageCommand(!showPleuraPct)}
-          />
-          <label
-            htmlFor="pleura-percentage-switch"
-            className="cursor-pointer"
-            onClick={() => setShowPleuraPercentageCommand(!showPleuraPct)}
-          >
-            {t('Show pleura percentage')}
-          </label>
-        </div>
-      </div>
-    </PanelSection.Content>
-  );
-
   const renderSectorAnnotations = () => (
     <PanelSection.Content>
       <div className="flex h-full flex-col p-2">
@@ -215,7 +169,7 @@ export default function USAnnotationPanel() {
                     size="sm"
                     className="h-8 px-2"
                     onClick={toggleShowOverlay}
-                    aria-label={t('Show Overlay')}
+                    aria-label={t('Show pleura percentage')}
                     aria-pressed={showOverlay}
                   >
                     {showOverlay ? (
@@ -225,9 +179,26 @@ export default function USAnnotationPanel() {
                     )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">{t('Show Overlay')}</TooltipContent>
+                <TooltipContent side="bottom">{t('Show pleura percentage')}</TooltipContent>
               </Tooltip>
-              <Separator orientation="vertical" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2"
+                    onClick={toggleDepthGuide}
+                    aria-label={t('Depth guide toggle')}
+                    aria-pressed={depthGuide}
+                  >
+                    <Icons.ToolReferenceLines
+                      className={`h-4 w-4 ${depthGuide ? '' : 'opacity-40'}`}
+                    />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{t('Depth guide toggle')}</TooltipContent>
+              </Tooltip>
               <Separator orientation="vertical" />
             </TabsList>
           </Tabs>
@@ -369,16 +340,11 @@ export default function USAnnotationPanel() {
         {renderSectorAnnotations()}
       </PanelSection>
 
-      <PanelSection defaultOpen={false}>
+      <PanelSection>
         <PanelSection.Header>{t('Clip level labels')}</PanelSection.Header>
         <PanelSection.Content>
           <ClipLevelLabels selectedLabels={clipLabels} onChange={setClipLabels} />
         </PanelSection.Content>
-      </PanelSection>
-
-      <PanelSection>
-        <PanelSection.Header>{t('Settings')}</PanelSection.Header>
-        {renderSettingsToggles()}
       </PanelSection>
     </div>
   );
