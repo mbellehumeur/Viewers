@@ -194,7 +194,7 @@ export default function USAnnotationPanel() {
 
   const renderSectorAnnotations = () => (
     <PanelSection.Content>
-      <div className="p-2">
+      <div className="flex h-full flex-col p-2">
         <div className="flex items-center gap-2">
           <Tabs
             defaultValue={UltrasoundPleuraBLineTool.USPleuraBLineAnnotationType.BLINE}
@@ -258,57 +258,53 @@ export default function USAnnotationPanel() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="mt-2 w-full overflow-hidden">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="text-muted-foreground border-input/50 border-b">
+                  <th></th>
+                  <th className="py-2 px-2 text-left font-normal">{t('Frame')}</th>
+                  <th className="py-2 px-2 text-center font-normal">{t('Pleura lines')}</th>
+                  <th className="py-2 px-2 text-center font-normal">{t('B-lines')}</th>
+                  <th className="w-10"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {annotatedFrames.map(item => (
+                  <tr
+                    key={item.frame}
+                    className={`border-input/50 border-b ${
+                      item.frame === 5 ? 'bg-cyan-800 bg-opacity-30' : ''
+                    }`}
+                    onClick={() => handleRowClick(item)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td className="py-2 px-2">{item.index}</td>
+                    <td className="py-2 px-2">{item.frame + 1}</td>
+                    <td className="py-2 px-2 text-center">{item.pleura}</td>
+                    <td className="py-2 px-2 text-center">{item.bLine}</td>
+                    <td className="py-2 px-2 text-right">
+                      {item.frame === 5 && (
+                        <div className="flex items-center justify-end">
+                          <Button variant="ghost" className="p-0">
+                            <Icons.EyeVisible />
+                          </Button>
+                          <Button variant="ghost" className="ml-2 p-0">
+                            <Icons.More />
+                          </Button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </ScrollArea>
       </div>
     </PanelSection.Content>
-  );
-
-  const renderAnnotatedFrames = () => (
-    <ScrollArea className="h-full">
-      <PanelSection.Content>
-        <div className="w-full overflow-hidden">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="text-muted-foreground border-input/50 border-b">
-                <th></th>
-                <th className="py-2 px-2 text-left font-normal">{t('Frame')}</th>
-                <th className="py-2 px-2 text-center font-normal">{t('Pleura lines')}</th>
-                <th className="py-2 px-2 text-center font-normal">{t('B-lines')}</th>
-                <th className="w-10"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {annotatedFrames.map(item => (
-                <tr
-                  key={item.frame}
-                  className={`border-input/50 border-b ${
-                    item.frame === 5 ? 'bg-cyan-800 bg-opacity-30' : ''
-                  }`}
-                  onClick={() => handleRowClick(item)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <td className="py-2 px-2">{item.index}</td>
-                  <td className="py-2 px-2">{item.frame + 1}</td>
-                  <td className="py-2 px-2 text-center">{item.pleura}</td>
-                  <td className="py-2 px-2 text-center">{item.bLine}</td>
-                  <td className="py-2 px-2 text-right">
-                    {item.frame === 5 && (
-                      <div className="flex items-center justify-end">
-                        <Button variant="ghost" className="p-0">
-                          <Icons.EyeVisible />
-                        </Button>
-                        <Button variant="ghost" className="ml-2 p-0">
-                          <Icons.More />
-                        </Button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </PanelSection.Content>
-    </ScrollArea>
   );
 
   const updateAnnotatedFrames = () => {
@@ -368,14 +364,9 @@ export default function USAnnotationPanel() {
         {renderRater()}
       </PanelSection>
 
-      <PanelSection>
+      <PanelSection className="flex-1">
         <PanelSection.Header>{t('Sector Annotations')}</PanelSection.Header>
         {renderSectorAnnotations()}
-      </PanelSection>
-
-      <PanelSection className="flex-1">
-        <PanelSection.Header>{t('Annotated Frames')}</PanelSection.Header>
-        {renderAnnotatedFrames()}
       </PanelSection>
 
       <PanelSection defaultOpen={false}>
