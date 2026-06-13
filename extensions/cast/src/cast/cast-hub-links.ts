@@ -45,12 +45,18 @@ export function resolveCastConferenceClientUrl(
   return conferenceUrl.href;
 }
 
-export function openCastHubPopup(url: string, windowName: string): void {
+export const CAST_CONFERENCE_POPUP_SIZE = { width: 660, height: 500 };
+
+export function openCastHubPopup(
+  url: string,
+  windowName: string,
+  size: { width: number; height: number } = { width: 800, height: 600 }
+): void {
   if (!url) {
     return;
   }
-  const popupWidth = 800;
-  const popupHeight = 600;
+  const popupWidth = size.width;
+  const popupHeight = size.height;
   const left = Math.max(0, Math.floor((window.screen.width - popupWidth) / 2));
   const top = Math.max(0, Math.floor((window.screen.height - popupHeight) / 2));
   const features = [

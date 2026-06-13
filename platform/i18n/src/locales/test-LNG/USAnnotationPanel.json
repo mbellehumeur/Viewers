@@ -1,5 +1,7 @@
 {
-  "Workflow": "Test Workflow",
+  "Settings": "Test Settings",
+  "Rater": "Test Rater",
+  "Clip level labels": "Test Clip level labels",
   "Depth guide toggle": "Test Depth guide toggle",
   "Show pleura percentage": "Test Show pleura percentage",
   "Sector Annotations": "Test Sector Annotations",

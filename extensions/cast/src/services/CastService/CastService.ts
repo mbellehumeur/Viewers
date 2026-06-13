@@ -6,9 +6,9 @@ import vtkCastClient, {
   generateSubscriberName,
 } from '@kitware/vtk.js/Sources/IO/Core/CastClient';
 import {
-  buildSceneviewResponsePayload,
-  isSceneviewRequestDataType,
-} from '../../cast/build-sceneview-response';
+  buildStatusResponsePayload,
+  isStatusRequestDataType,
+} from '../../cast/build-status-response';
 import {
   CAST_PRODUCT_NAME,
   CAST_TOPIC_SESSION_KEY,
@@ -173,7 +173,7 @@ export default class CastService extends PubSubService {
   private _urlHubAccessToken = '';
   private _wsState = '';
   private _lastBroadcastHeaderStatus: CastHeaderStatusState | null = null;
-  private _fhircastContextRequestedForSession = false;
+  private _statusRequestedForSession = false;
 
   constructor(
     extensionManager: ExtensionManagerLike,
@@ -235,12 +235,12 @@ export default class CastService extends PubSubService {
     this._client.onConnectionStateChange((wsState: string) => {
       this._broadcastCastStatus(wsState);
       if (wsState === 'connected') {
-        if (!this._fhircastContextRequestedForSession) {
-          this._fhircastContextRequestedForSession = true;
-          void this._requestFhircastContext();
+        if (!this._statusRequestedForSession) {
+          this._statusRequestedForSession = true;
+          void this._requestStatus();
         }
       } else if (wsState === 'disconnected' || wsState === 'error') {
-        this._fhircastContextRequestedForSession = false;
+        this._statusRequestedForSession = false;
       }
     });
 
@@ -509,30 +509,30 @@ export default class CastService extends PubSubService {
       return;
     }
 
+    if (isStatusRequestDataType(context.dataType)) {
+      const statusPayload = buildStatusResponsePayload(
+        this._productName,
+        this._servicesManager
+      );
+      this._client.sendCastRequestResponse(
+        correlationId,
+        'STATUS',
+        statusPayload,
+        typeof event['hub.topic'] === 'string' ? event['hub.topic'] : undefined
+      );
+      console.info(`${LOG_PREFIX} status-response`, {
+        id: correlationId,
+        viewportCount: statusPayload.sceneview.viewports.length,
+      });
+      return;
+    }
+
     const targetKeyword = getInboundTargetActorKeyword(message);
     if (
       targetKeyword &&
       targetKeyword !== '*' &&
       targetKeyword !== ID_ACTOR_KEYWORD
     ) {
-      return;
-    }
-
-    if (isSceneviewRequestDataType(context.dataType)) {
-      const sceneviewPayload = buildSceneviewResponsePayload(
-        this._productName,
-        this._servicesManager
-      );
-      this._client.sendCastRequestResponse(
-        correlationId,
-        'SCENEVIEW',
-        sceneviewPayload,
-        typeof event['hub.topic'] === 'string' ? event['hub.topic'] : undefined
-      );
-      console.info(`${LOG_PREFIX} sceneview-response`, {
-        id: correlationId,
-        viewportCount: sceneviewPayload.viewports.length,
-      });
       return;
     }
 
@@ -566,7 +566,7 @@ export default class CastService extends PubSubService {
     );
   }
 
-  private async _requestFhircastContext(): Promise<void> {
+  private async _requestStatus(): Promise<void> {
     const subscriber = this._client.getSessionConfig().subscriberName?.trim() ?? '';
     if (!subscriber) {
       return;
@@ -574,21 +574,21 @@ export default class CastService extends PubSubService {
 
     try {
       const topic = this._client.getSessionConfig().topic?.trim() ?? '';
-      const fhirDataType = 'FHIRcastContext';
+      const statusDataType = 'STATUS';
       const result = await this._client.request({
         'subscriber.name': subscriber,
         'subscriber.product.name': this._productName,
         event: {
-          'hub.event': requestEventFor(fhirDataType),
+          'hub.event': requestEventFor(statusDataType),
           ...(topic ? { 'hub.topic': topic } : {}),
-          context: { dataType: fhirDataType },
+          context: { dataType: statusDataType },
         },
-        'subscriber.actor': 'WORKLIST_CLIENT',
-        'target.actor': 'WORKLIST_CLIENT',
+        'subscriber.actor': ID_ACTOR_KEYWORD,
+        'target.actor': '*',
       });
 
       if (!result.ok) {
-        console.warn(`${LOG_PREFIX} FHIRcastContext request failed`, result.status);
+        console.warn(`${LOG_PREFIX} STATUS request failed`, result.status);
         return;
       }
 
@@ -599,24 +599,26 @@ export default class CastService extends PubSubService {
       const responses = Array.isArray(envelope.responses) ? envelope.responses : [];
       let chosenData: unknown;
       for (const item of responses) {
+        const actor = String(item?.actor ?? '').trim().toUpperCase();
         const itemData = item?.data;
         if (
           itemData &&
           typeof itemData === 'object' &&
-          (itemData as { 'context.type'?: unknown })['context.type'] === 'ImagingStudy'
+          (itemData as { 'context.type'?: unknown })['context.type'] ===
+            'ImagingStudy' &&
+          (actor === 'WORKLIST_CLIENT' || chosenData === undefined)
         ) {
           chosenData = itemData;
-          break;
+          if (actor === 'WORKLIST_CLIENT') {
+            break;
+          }
         }
-      }
-      if (chosenData === undefined && responses.length > 0) {
-        chosenData = responses[0]?.data;
       }
       if (chosenData !== undefined) {
         await this._openStudyFromContextData(chosenData);
       }
     } catch (err) {
-      console.error(`${LOG_PREFIX} failed to request FHIRcastContext`, err);
+      console.error(`${LOG_PREFIX} failed to request STATUS`, err);
     }
   }
 

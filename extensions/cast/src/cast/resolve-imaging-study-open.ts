@@ -11,6 +11,7 @@ import {
   extractImagingStudyFiles,
   extractNiftiDownloadUrl,
   extractNiftiFilename,
+  extractOhifMode,
   extractOpenMode,
   extractVolviewSampleId,
   type CastImagingStudyFileEntry,
@@ -23,18 +24,21 @@ export type ImagingStudyDicomwebOpen = {
   studyInstanceUID: string;
   seriesInstanceUID?: string;
   dicomwebRoot?: string;
+  ohifMode?: string;
 };
 
 export type ImagingStudyFilesOpen = {
   mode: 'files';
   studyId: string;
   files: CastImagingStudyFileEntry[];
+  ohifMode?: string;
 };
 
 export type ImagingStudyDicomUrlOpen = {
   mode: 'dicom-url';
   studyId: string;
   files: CastImagingStudyFileEntry[];
+  ohifMode?: string;
 };
 
 export type ImagingStudyIdcOpen = {
@@ -44,6 +48,7 @@ export type ImagingStudyIdcOpen = {
   seriesInstanceUID?: string;
   sourceBucket: 'aws' | 'gcs';
   files: CastImagingStudyFileEntry[];
+  ohifMode?: string;
 };
 
 export type ImagingStudyOpenPlan =
@@ -54,14 +59,15 @@ export type ImagingStudyOpenPlan =
 
 function resolveFilesPlan(
   context: unknown,
-  studyId: string
+  studyId: string,
+  ohifMode?: string
 ): ImagingStudyFilesOpen | null {
   const normalized = normalizeImagingStudyContext(context);
   const files = extractImagingStudyFiles(normalized);
   if (files.length === 0) {
     return null;
   }
-  return { mode: 'files', studyId, files };
+  return { mode: 'files', studyId, files, ohifMode };
 }
 
 export function resolveImagingStudyOpenPlan(
@@ -70,6 +76,7 @@ export function resolveImagingStudyOpenPlan(
   const normalized = normalizeImagingStudyContext(context);
   const studyId = extractVolviewSampleId(normalized) || 'study';
   const openMode = extractOpenMode(normalized);
+  const ohifMode = extractOhifMode(normalized) || undefined;
 
   if (openMode === CAST_OPEN_MODE_DICOMWEB) {
     const studyInstanceUID = extractDicomStudyUid(normalized);
@@ -84,11 +91,12 @@ export function resolveImagingStudyOpenPlan(
       studyInstanceUID,
       seriesInstanceUID,
       dicomwebRoot,
+      ohifMode,
     };
   }
 
   if (openMode === CAST_OPEN_MODE_FILES) {
-    const filesPlan = resolveFilesPlan(normalized, studyId);
+    const filesPlan = resolveFilesPlan(normalized, studyId, ohifMode);
     if (filesPlan) {
       return filesPlan;
     }
@@ -99,7 +107,7 @@ export function resolveImagingStudyOpenPlan(
     if (!files.length) {
       return null;
     }
-    return { mode: 'dicom-url', studyId, files };
+    return { mode: 'dicom-url', studyId, files, ohifMode };
   }
 
   if (openMode === CAST_OPEN_MODE_IDC) {
@@ -122,10 +130,11 @@ export function resolveImagingStudyOpenPlan(
       seriesInstanceUID,
       sourceBucket: extractIdcSourceBucket(normalized),
       files,
+      ohifMode,
     };
   }
 
-  const legacyFiles = resolveFilesPlan(normalized, studyId);
+  const legacyFiles = resolveFilesPlan(normalized, studyId, ohifMode);
   if (legacyFiles) {
     return legacyFiles;
   }
@@ -137,6 +146,7 @@ export function resolveImagingStudyOpenPlan(
       mode: 'files',
       studyId,
       files: [{ url, fileName: filename || 'volume.nii.gz', label: studyId }],
+      ohifMode,
     };
   }
 
@@ -148,6 +158,7 @@ export function resolveImagingStudyOpenPlan(
       studyInstanceUID,
       seriesInstanceUID: extractDicomSeriesUid(normalized) || undefined,
       dicomwebRoot: extractDicomwebRoot(normalized) || undefined,
+      ohifMode,
     };
   }
 

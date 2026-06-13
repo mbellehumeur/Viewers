@@ -30,14 +30,14 @@ export function ensureCastSubscribeEvents(events?: string[]): string[] {
   if (events.some(entry => String(entry).trim() === '*')) {
     return ['*'];
   }
-  const sceneviewRequest = requestEventFor('SCENEVIEW');
+  const statusRequest = requestEventFor('STATUS');
   const normalized = new Set(
     events.map(entry => String(entry).trim().toLowerCase()).filter(Boolean)
   );
-  if (!sceneviewRequest || normalized.has(sceneviewRequest.toLowerCase())) {
+  if (!statusRequest || normalized.has(statusRequest.toLowerCase())) {
     return [...events];
   }
-  return [...events, sceneviewRequest];
+  return [...events, statusRequest];
 }
 
 function hubNameFromConfig(hub: ConfigCastHub): string {

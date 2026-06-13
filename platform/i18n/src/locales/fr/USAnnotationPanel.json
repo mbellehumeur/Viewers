@@ -1,5 +1,7 @@
 {
-  "Workflow": "Flux de travail",
+  "Settings": "Paramètres",
+  "Rater": "Annotateur",
+  "Clip level labels": "Étiquettes au niveau du clip",
   "Depth guide toggle": "Activer/désactiver le guide de profondeur",
   "Show pleura percentage": "Afficher le pourcentage de plèvre",
   "Sector Annotations": "Annotations de secteur",

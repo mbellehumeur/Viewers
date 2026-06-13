@@ -31,14 +31,15 @@ function looksLikeDicomUid(value: string): boolean {
 export function navigateToStudy(
   studyUID: string,
   seriesUID?: string,
-  useLocalDataSource = false
+  useLocalDataSource = false,
+  ohifMode?: string
 ): void {
   const currentLocation =
     typeof window !== 'undefined' ? window.location.toString() : '';
   if (currentLocation.includes(studyUID)) {
     return;
   }
-  navigateToCastViewer([studyUID], { seriesUID, useLocalDataSource });
+  navigateToCastViewer([studyUID], { seriesUID, useLocalDataSource, modeRoute: ohifMode });
 }
 
 export class ImagingStudyHandler {
@@ -76,7 +77,9 @@ export class ImagingStudyHandler {
     }
 
     if (plan?.mode === 'dicom-url' && plan.files.length > 0) {
-      await loadCastStudyFilesFromUrls(plan.files, this.dicomCallbacks);
+      await loadCastStudyFilesFromUrls(plan.files, this.dicomCallbacks, {
+        ohifMode: plan.ohifMode,
+      });
       return;
     }
 
@@ -91,7 +94,8 @@ export class ImagingStudyHandler {
       );
       await loadCastStudyFilesFromUrls(
         toCastFileEntries(downloadEntries),
-        this.dicomCallbacks
+        this.dicomCallbacks,
+        { ohifMode: plan?.ohifMode }
       );
       return;
     }
@@ -116,12 +120,19 @@ export class ImagingStudyHandler {
     }
 
     if (plan.mode === 'dicomweb') {
-      navigateToStudy(plan.studyInstanceUID, plan.seriesInstanceUID, false);
+      navigateToStudy(
+        plan.studyInstanceUID,
+        plan.seriesInstanceUID,
+        false,
+        plan.ohifMode
+      );
       return;
     }
 
     if (plan.mode === 'files' && plan.files.length > 0) {
-      await loadCastStudyFilesFromUrls(plan.files, this.dicomCallbacks);
+      await loadCastStudyFilesFromUrls(plan.files, this.dicomCallbacks, {
+        ohifMode: plan.ohifMode,
+      });
       return;
     }
 

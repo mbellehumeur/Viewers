@@ -17,6 +17,7 @@ import {
   type CastHeaderStatusState,
 } from '../cast/cast-header-status';
 import {
+  CAST_CONFERENCE_POPUP_SIZE,
   openCastHubPopup,
   resolveCastConferenceClientUrl,
   resolveCastHubAdminUrl,
@@ -108,7 +109,8 @@ function CastHeaderStatus() {
         topic: session.topic,
         subscriberName: session.subscriberName,
       }),
-      'castConferenceClientWindow'
+      'castConferenceClientWindow',
+      CAST_CONFERENCE_POPUP_SIZE
     );
   };
 
@@ -158,10 +160,10 @@ function CastHeaderStatus() {
           disabled={!hasOpenStudy}
           onSelect={openTotalSegmentatorDialog}
         >
-          Send to Total Segmentator
+          Total Segmentator
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={openHubAdminPortal}>Open Hub</DropdownMenuItem>
-        <DropdownMenuItem onSelect={openConferenceClient}>Start a conference</DropdownMenuItem>
+        <DropdownMenuItem onSelect={openConferenceClient}>Conferencing</DropdownMenuItem>
+        <DropdownMenuItem onSelect={openHubAdminPortal}>Hub</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
     <TotalSegmentatorDialog

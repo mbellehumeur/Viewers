@@ -46,6 +46,8 @@ export function navigateToCastViewer(
     seriesUID?: string;
     dataSource?: string;
     useLocalDataSource?: boolean;
+    /** OHIF mode route segment (default `viewer`). */
+    modeRoute?: string;
   }
 ): void {
   if (!studyUIDs.length) {
@@ -64,5 +66,6 @@ export function navigateToCastViewer(
     query.append('SeriesInstanceUIDs', options.seriesUID);
   }
 
-  castNavigate(`/viewer?${query.toString()}`);
+  const modeRoute = String(options?.modeRoute || 'viewer').replace(/^\/+|\/+$/g, '');
+  castNavigate(`/${modeRoute}?${query.toString()}`);
 }

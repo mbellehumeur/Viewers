@@ -299,6 +299,7 @@ export async function loadCastIdcStudyFiles(
   navigateToCastViewer(studyList, {
     seriesUID: plan.seriesInstanceUID,
     dataSource: CAST_IDC_DATA_SOURCE,
+    modeRoute: plan.ohifMode,
   });
 
   console.info(`${LOG_PREFIX} imagingstudy-open loaded IDC study`, {
@@ -314,7 +315,8 @@ function isDirectNiftiUrl(url: string, fileName?: string): boolean {
 
 export async function loadCastStudyFilesFromUrls(
   fileEntries: Array<{ url: string; fileName?: string; label?: string }>,
-  callbacks: DicomIngestCallbacks
+  callbacks: DicomIngestCallbacks,
+  options?: { ohifMode?: string }
 ): Promise<void> {
   const studyUIDs = new Set<string>();
 
@@ -361,7 +363,10 @@ export async function loadCastStudyFilesFromUrls(
     return;
   }
 
-  navigateToCastViewer(studyList, { useLocalDataSource: true });
+  navigateToCastViewer(studyList, {
+    useLocalDataSource: true,
+    modeRoute: options?.ohifMode,
+  });
 
   console.info(`${LOG_PREFIX} imagingstudy-open loaded ${studyList.length} study(s)`, {
     studyUIDs: studyList,

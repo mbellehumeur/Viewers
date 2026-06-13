@@ -9,7 +9,6 @@ import {
   PanelSection,
   ScrollArea,
   /* Controls */
-  Label,
   Button,
   Icons,
   Switch,
@@ -21,7 +20,14 @@ import {
   TabsList,
   TabsTrigger,
   Separator,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  Input,
 } from '@ohif/ui-next';
+
+import ClipLevelLabels from './ClipLevelLabels';
+import { subscribeCastTopic } from '../castTopic';
 
 /**
  * A side panel that drives the ultrasound annotation workflow.
@@ -39,16 +45,28 @@ export default function USAnnotationPanel() {
   const { viewportGridService, cornerstoneViewportService, measurementService } =
     servicesManager.services as AppTypes.Services;
 
+  const castService = (servicesManager.services as { castService?: unknown }).castService as
+    | Parameters<typeof subscribeCastTopic>[0]
+    | undefined;
+
   // UI state variables
   const [depthGuide, setDepthGuide] = useState(true);
-  const [autoAdd, setAutoAdd] = useState(true);
   const [showPleuraPct, setShowPleuraPct] = useState(true);
   const [showOverlay, setShowOverlay] = useState(true);
+  const [rater, setRater] = useState('');
 
   // Data state variables
   const [annotatedFrames, setAnnotatedFrames] = useState<any[]>([]);
   const [imageIdsToObserve, setImageIdsToObserve] = useState<string[]>([]);
-  const [labels, setLabels] = useState<string[]>([]);
+  const [clipLabels, setClipLabels] = useState<string[]>([]);
+
+  useEffect(() => {
+    return subscribeCastTopic(castService, topic => {
+      if (topic) {
+        setRater(topic);
+      }
+    });
+  }, [castService]);
 
   /** ──────────────────────────────────────────────────────
    * Helper – commands bridging back to OHIF services.       */
@@ -80,25 +98,6 @@ export default function USAnnotationPanel() {
     setDepthGuide(value);
   };
   /**
-   * Sets the auto-add annotations state
-   * When enabled, all frames are monitored for annotations
-   * When disabled, only manually added frames are monitored
-   * @param value - Boolean indicating whether to auto-add annotations
-   */
-  const setAutoAddCommand = (value: boolean) => {
-    if (value) {
-      setImageIdsToObserve([]);
-    } else {
-      const imageIds = annotatedFrames.map(item => item.imageId);
-      if (imageIds.length > 0) {
-        setImageIdsToObserve(imageIds);
-      } else {
-        setImageIdsToObserve(['Manual']);
-      }
-    }
-    setAutoAdd(value);
-  };
-  /**
    * Sets whether to show the pleura percentage in the viewport overlay
    * @param value - Boolean indicating whether to show the percentage
    */
@@ -106,38 +105,24 @@ export default function USAnnotationPanel() {
     commandsManager.runCommand('setShowPleuraPercentage', { value });
     setShowPleuraPct(value);
   };
-  /**
-   * Sets whether to show the fan overlay in the viewport
-   * @param value - Boolean indicating whether to show the overlay
-   */
   const setShowOverlayCommand = (value: boolean) => {
     commandsManager.runCommand('setDisplayFanAnnotation', { value });
     commandsManager.runCommand('setShowPleuraPercentage', { value });
     setShowOverlay(value);
+    setShowPleuraPct(value);
+  };
+  const toggleShowOverlay = () => {
+    setShowOverlayCommand(!showOverlay);
   };
   /**
    * Downloads the annotations as a JSON file
-   * Uses the labels and imageIdsToObserve state variables
    */
   const downloadJSON = () => {
-    commandsManager.runCommand('downloadJSON', { labels, imageIds: imageIdsToObserve });
-  };
-
-  /**
-   * Adds the current image ID to the list of monitored image IDs
-   * Only works when auto-add is disabled
-   */
-  const addCurrentImageId = () => {
-    if (!autoAdd) {
-      const activeViewportId = viewportGridService.getActiveViewportId();
-      const viewport = cornerstoneViewportService.getCornerstoneViewport(activeViewportId);
-      const currentImageId = viewport.getCurrentImageId();
-      const imageIds = [...imageIdsToObserve];
-      if (!imageIds.includes(currentImageId)) {
-        imageIds.push(currentImageId);
-      }
-      setImageIdsToObserve(imageIds);
-    }
+    commandsManager.runCommand('downloadJSON', {
+      labels: clipLabels,
+      imageIds: imageIdsToObserve,
+      rater,
+    });
   };
 
   /**
@@ -151,9 +136,25 @@ export default function USAnnotationPanel() {
     utilities.scroll(viewport, { delta: item.frame - viewport.getCurrentImageIdIndex() });
   };
 
-  /**
-   * Render helpers so the JSX doesn’t become spaghetti.     */
-  const renderWorkflowToggles = () => (
+  const renderRater = () => (
+    <PanelSection.Content>
+      <div className="flex items-center gap-2 p-2">
+        <Input
+          id="us-annotation-rater"
+          className="h-8 min-w-0 flex-1 text-sm"
+          value={rater}
+          onChange={event => setRater(event.target.value)}
+          placeholder={t('Rater')}
+        />
+        <Button variant="ghost" size="sm" className="shrink-0" onClick={() => downloadJSON()}>
+          <Icons.Download className="h-4 w-4" />
+          <span>{t('JSON')}</span>
+        </Button>
+      </div>
+    </PanelSection.Content>
+  );
+
+  const renderSettingsToggles = () => (
     <PanelSection.Content>
       <div className="text-foreground space-y-3 p-2 text-sm">
         <div className="flex items-center">
@@ -171,22 +172,6 @@ export default function USAnnotationPanel() {
             {t('Depth guide toggle')}
           </label>
         </div>
-
-        {/* <div className="flex items-center">
-          <Switch
-            id="auto-add-switch"
-            className="mr-3"
-            checked={autoAdd}
-            onCheckedChange={() => setAutoAddCommand(!autoAdd)}
-          />
-          <label
-            htmlFor="auto-add-switch"
-            className="cursor-pointer"
-            onClick={() => setAutoAddCommand(!autoAdd)}
-          >
-            Auto-add annotations
-          </label>
-        </div> */}
 
         <div className="flex items-center">
           <Switch
@@ -209,8 +194,7 @@ export default function USAnnotationPanel() {
 
   const renderSectorAnnotations = () => (
     <PanelSection.Content>
-      <div className="flex flex-col gap-4 p-2">
-        <Label>{t('Sector Annotations')}</Label>
+      <div className="p-2">
         <div className="flex items-center gap-2">
           <Tabs
             defaultValue={UltrasoundPleuraBLineTool.USPleuraBLineAnnotationType.BLINE}
@@ -223,6 +207,26 @@ export default function USAnnotationPanel() {
               <TabsTrigger value={UltrasoundPleuraBLineTool.USPleuraBLineAnnotationType.BLINE}>
                 <Icons.Plus /> {t('B-line')}
               </TabsTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2"
+                    onClick={toggleShowOverlay}
+                    aria-label={t('Show Overlay')}
+                    aria-pressed={showOverlay}
+                  >
+                    {showOverlay ? (
+                      <Icons.EyeVisible className="h-4 w-4" />
+                    ) : (
+                      <Icons.Hide className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{t('Show Overlay')}</TooltipContent>
+              </Tooltip>
               <Separator orientation="vertical" />
               <Separator orientation="vertical" />
             </TabsList>
@@ -254,20 +258,6 @@ export default function USAnnotationPanel() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-
-        <div className="mt-2 flex items-center gap-2">
-          <Switch
-            id="show-overlay-switch"
-            checked={showOverlay}
-            onCheckedChange={() => setShowOverlayCommand(!showOverlay)}
-          />
-          <label htmlFor="show-overlay-switch" className="text-muted-foreground cursor-pointer">
-            {t('Show Overlay')}
-          </label>
-        </div>
-
-        {/* Divider */}
-        <hr className="border-input/50 border-t" />
       </div>
     </PanelSection.Content>
   );
@@ -275,24 +265,6 @@ export default function USAnnotationPanel() {
   const renderAnnotatedFrames = () => (
     <ScrollArea className="h-full">
       <PanelSection.Content>
-        <div className="mb-4 flex items-center justify-between">
-          {/* <Button
-            variant="ghost"
-            size="sm"
-            className="text-blue-300"
-            disabled={autoAdd}
-            onClick={addCurrentImageId}
-          >
-            <Icons.Plus className="mr-2" /> Add current frame
-          </Button> */}
-          <Button variant="ghost" onClick={() => downloadJSON()}>
-            <Icons.Download className="h-5 w-5" />
-            <span>{t('JSON')}</span>
-          </Button>
-          <Button variant="ghost" onClick={() => setShowOverlayCommand(!showOverlay)}>
-            {showOverlay ? <Icons.Hide className="h-5 w-5" /> : <Icons.Show className="h-5 w-5" />}
-          </Button>
-        </div>
         <div className="w-full overflow-hidden">
           <table className="w-full border-collapse text-sm">
             <thead>
@@ -342,7 +314,6 @@ export default function USAnnotationPanel() {
   const updateAnnotatedFrames = () => {
     const activeViewportId = viewportGridService.getActiveViewportId();
     const viewport = cornerstoneViewportService.getCornerstoneViewport(activeViewportId);
-    // copying to avoid mutating the original array
     const imageIdsMonitored = [...imageIdsToObserve];
     const imageIdFilter = (imageId: string) => {
       if (imageIdsMonitored.length === 0) {
@@ -362,10 +333,7 @@ export default function USAnnotationPanel() {
     });
     setAnnotatedFrames(updatedFrames);
   };
-  /**
-   * Callback function that is called when an annotation is modified
-   * Updates the annotatedFrames state with the latest annotation data
-   */
+
   const annotationModified = React.useCallback(
     event => {
       if (event.detail.annotation.metadata.toolName === UltrasoundPleuraBLineTool.toolName) {
@@ -390,36 +358,36 @@ export default function USAnnotationPanel() {
     };
   }, [annotationModified, measurementService]);
 
-  /**
-   * ──────────────────────────────────────────────────────
-   *  🖼  Final Render                                      */
   return (
     <div
       className="text-foreground h-full bg-background"
       style={{ minWidth: 240, maxWidth: 480, width: '100%' }}
     >
-      {/* Workflow */}
       <PanelSection>
-        <PanelSection.Header>{t('Workflow')}</PanelSection.Header>
-        {renderWorkflowToggles()}
+        <PanelSection.Header>{t('Rater')}</PanelSection.Header>
+        {renderRater()}
       </PanelSection>
 
-      {/* Progress
       <PanelSection>
-        <SectionHeader title="Workflow Progress" actionLabel="Source Folder" />
-        {renderWorkflowProgress()}
-      </PanelSection> */}
-
-      {/* Annotations */}
-      <PanelSection>
-        <PanelSection.Header>{t('Annotations')}</PanelSection.Header>
+        <PanelSection.Header>{t('Sector Annotations')}</PanelSection.Header>
         {renderSectorAnnotations()}
       </PanelSection>
 
-      {/* Annotated frames */}
       <PanelSection className="flex-1">
         <PanelSection.Header>{t('Annotated Frames')}</PanelSection.Header>
         {renderAnnotatedFrames()}
+      </PanelSection>
+
+      <PanelSection defaultOpen={false}>
+        <PanelSection.Header>{t('Clip level labels')}</PanelSection.Header>
+        <PanelSection.Content>
+          <ClipLevelLabels selectedLabels={clipLabels} onChange={setClipLabels} />
+        </PanelSection.Content>
+      </PanelSection>
+
+      <PanelSection>
+        <PanelSection.Header>{t('Settings')}</PanelSection.Header>
+        {renderSettingsToggles()}
       </PanelSection>
     </div>
   );

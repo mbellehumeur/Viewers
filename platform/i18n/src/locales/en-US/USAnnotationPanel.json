@@ -1,5 +1,7 @@
 {
-  "Workflow": "Workflow",
+  "Settings": "Settings",
+  "Rater": "Rater",
+  "Clip level labels": "Clip level labels",
   "Depth guide toggle": "Depth guide toggle",
   "Show pleura percentage": "Show pleura percentage",
   "Sector Annotations": "Sector Annotations",

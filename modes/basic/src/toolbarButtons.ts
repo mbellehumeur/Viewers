@@ -111,19 +111,6 @@ const toolbarButtons: Button[] = [
     },
   },
   {
-    id: 'volumeOptionsMenu',
-    uiType: 'ohif.volumeOptionsMenu',
-    props: {
-      icon: 'icon-mpr',
-      label: i18n.t('Buttons:Volume Options'),
-      tooltip: i18n.t('Buttons:Volume options and downsizing'),
-      evaluate: {
-        name: 'evaluate.volumeOptionsMenu',
-        hideWhenDisabled: true,
-      },
-    },
-  },
-  {
     id: 'windowLevelMenuEmbedded',
     uiType: 'ohif.windowLevelMenuEmbedded',
     props: {

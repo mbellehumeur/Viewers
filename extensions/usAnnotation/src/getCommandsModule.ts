@@ -182,7 +182,11 @@ function commandsModule({
      * @param imageIds - Array of image IDs to include in the JSON
      * @returns A JSON object containing the annotations data or undefined if generation fails
      */
-    generateUSPleuraBLineAnnotationsJSON: (labels: string[] = [], imageIds: string[] = []) => {
+    generateUSPleuraBLineAnnotationsJSON: (
+      labels: string[] = [],
+      imageIds: string[] = [],
+      rater = ''
+    ) => {
       const activeViewportId = viewportGridService.getActiveViewportId();
       const viewport = cornerstoneViewportService.getCornerstoneViewport(activeViewportId);
       if (!viewport) {
@@ -256,6 +260,8 @@ function commandsModule({
           image_size_rows: instance.rows,
           image_size_cols: instance.columns,
           AnnotationLabels: labels,
+          labels,
+          rater: rater.trim(),
           frame_annotations,
         };
         return json;
@@ -265,8 +271,8 @@ function commandsModule({
      * Downloads the ultrasound annotations as a JSON file
      * @param options - Object containing labels and imageIds arrays
      */
-    downloadUSPleuraBLineAnnotationsJSON({ labels = [], imageIds = [] }) {
-      const json = actions.generateUSPleuraBLineAnnotationsJSON(labels, imageIds);
+    downloadUSPleuraBLineAnnotationsJSON({ labels = [], imageIds = [], rater = '' }) {
+      const json = actions.generateUSPleuraBLineAnnotationsJSON(labels, imageIds, rater);
       if (!json) {
         return;
       }
