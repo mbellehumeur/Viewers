@@ -34,10 +34,15 @@ export function ensureCastSubscribeEvents(events?: string[]): string[] {
   const normalized = new Set(
     events.map(entry => String(entry).trim().toLowerCase()).filter(Boolean)
   );
-  if (!statusRequest || normalized.has(statusRequest.toLowerCase())) {
-    return [...events];
+  const extras: string[] = [];
+  if (statusRequest && !normalized.has(statusRequest.toLowerCase())) {
+    extras.push(statusRequest);
+    normalized.add(statusRequest.toLowerCase());
   }
-  return [...events, statusRequest];
+  if (!normalized.has('status-update')) {
+    extras.push('status-update');
+  }
+  return extras.length ? [...events, ...extras] : [...events];
 }
 
 function hubNameFromConfig(hub: ConfigCastHub): string {

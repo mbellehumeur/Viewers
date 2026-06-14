@@ -8,6 +8,7 @@ import vtkCastClient, {
 import {
   buildStatusResponsePayload,
   isStatusRequestDataType,
+  totalSegmentatorAvailableFromStatusResponses,
 } from '../../cast/build-status-response';
 import {
   CAST_PRODUCT_NAME,
@@ -27,6 +28,7 @@ import {
 } from '../../cast/envelope-fields';
 import { getHubEventLower } from '../../cast/extract-file-payloads';
 import { buildGetRequestImagePayload, normalizeGetRequestDataType } from '../../cast/get-response-image';
+import { tryApplyPendingUsAnnotations } from '../../cast/import-us-annotations';
 import {
   handleAnnotationEvent,
   ImagingStudyHandler,
@@ -49,6 +51,10 @@ import {
   normalizeTotalSegmentatorOptions,
   type TotalSegmentatorOptions,
 } from '../../cast/total-segmentator-options';
+import {
+  CAST_CONFERENCE_POLL_MS,
+  resolveCastConferenceState,
+} from '../../cast/conference-status';
 import {
   buildCastHeaderStatus,
   castHeaderStatusEqual,
@@ -172,6 +178,11 @@ export default class CastService extends PubSubService {
   /** Hub access token from worklist deep-link (`id-token` query); skips OAuth when set. */
   private _urlHubAccessToken = '';
   private _wsState = '';
+  private _totalSegmentatorAvailable = false;
+  private _totalSegmentatorJobStatus = '';
+  private _conferenceActive = false;
+  private _conferenceTitle = '';
+  private _conferencePollTimer: ReturnType<typeof setInterval> | null = null;
   private _lastBroadcastHeaderStatus: CastHeaderStatusState | null = null;
   private _statusRequestedForSession = false;
 
@@ -239,8 +250,13 @@ export default class CastService extends PubSubService {
           this._statusRequestedForSession = true;
           void this._requestStatus();
         }
+        this._startConferencePoll();
       } else if (wsState === 'disconnected' || wsState === 'error') {
         this._statusRequestedForSession = false;
+        this._totalSegmentatorAvailable = false;
+        this._totalSegmentatorJobStatus = '';
+        this._stopConferencePoll();
+        this._setConferenceActive(false);
       }
     });
 
@@ -248,6 +264,7 @@ export default class CastService extends PubSubService {
   }
 
   public destroy(): void {
+    this._stopConferencePoll();
     this._client.delete();
   }
 
@@ -269,7 +286,34 @@ export default class CastService extends PubSubService {
       this._subscriberName.trim() ||
       this._client.getSessionConfig().subscriberName?.trim() ||
       '';
-    return buildCastHeaderStatus(topic, hubLabel, subscriberName, this._wsState);
+    return buildCastHeaderStatus(
+      topic,
+      hubLabel,
+      subscriberName,
+      this._wsState,
+      this._totalSegmentatorAvailable,
+      this._totalSegmentatorJobStatus,
+      this._conferenceActive,
+      this._conferenceTitle
+    );
+  }
+
+  public setTotalSegmentatorAvailable(available: boolean): void {
+    this._totalSegmentatorAvailable = available;
+  }
+
+  public clearTotalSegmentatorJobStatus(): void {
+    this._totalSegmentatorJobStatus = '';
+    this._broadcastCastStatus();
+  }
+
+  public appendTotalSegmentatorJobStatusLine(line: string): void {
+    const text = String(line ?? '').trim();
+    if (!text) {
+      return;
+    }
+    const current = this._totalSegmentatorJobStatus;
+    this._totalSegmentatorJobStatus = current ? `${current}\n${text}` : text;
   }
 
   public setSubscriberName(subscriberName: string): void {
@@ -444,8 +488,30 @@ export default class CastService extends PubSubService {
         void this._handleBinaryEvent(message, 'nifti-send');
         return;
       }
+      if (hubEvent === 'status-update') {
+        const context = event.context;
+        const raw =
+          context && typeof context === 'object' && !Array.isArray(context)
+            ? (context as { message?: unknown }).message
+            : undefined;
+        if (typeof raw === 'string') {
+          this.appendTotalSegmentatorJobStatusLine(raw);
+          this._broadcastCastStatus();
+        }
+        return;
+      }
+      if (hubEvent === 'conference-start') {
+        const context = event.context;
+        const title =
+          context && typeof context === 'object' && !Array.isArray(context)
+            ? String((context as { title?: unknown }).title ?? '').trim()
+            : '';
+        this._setConferenceActive(true, title);
+        void this._syncConferenceActive();
+        return;
+      }
       if (hubEvent === 'annotation-update' || hubEvent === 'annotation-delete') {
-        handleAnnotationEvent(message);
+        handleAnnotationEvent(message, this._servicesManager);
       }
     });
   }
@@ -471,6 +537,7 @@ export default class CastService extends PubSubService {
       return null;
     }
     await this._imagingStudyHandler.handleOpen(event, resolved);
+    tryApplyPendingUsAnnotations(this._servicesManager);
     return { event, message: resolved };
   }
 
@@ -597,6 +664,10 @@ export default class CastService extends PubSubService {
           ? (result.data as CastRequestEnvelope)
           : undefined) ?? {};
       const responses = Array.isArray(envelope.responses) ? envelope.responses : [];
+      const available = totalSegmentatorAvailableFromStatusResponses(responses);
+      this.setTotalSegmentatorAvailable(available);
+      this._broadcastCastStatus();
+
       let chosenData: unknown;
       for (const item of responses) {
         const actor = String(item?.actor ?? '').trim().toUpperCase();
@@ -743,6 +814,42 @@ export default class CastService extends PubSubService {
     }
     this._lastBroadcastHeaderStatus = next;
     this._broadcastEvent(CastService.EVENTS.STATUS_CHANGED, next);
+  }
+
+  private _setConferenceActive(active: boolean, title = ''): void {
+    this._conferenceActive = active;
+    this._conferenceTitle = active ? title.trim() : '';
+    this._broadcastCastStatus();
+  }
+
+  private _stopConferencePoll(): void {
+    if (this._conferencePollTimer != null) {
+      clearInterval(this._conferencePollTimer);
+      this._conferencePollTimer = null;
+    }
+  }
+
+  private async _syncConferenceActive(): Promise<void> {
+    const hubEndpoint = this._client.getHubConfig().hub_endpoint ?? '';
+    const session = this._client.getSessionConfig();
+    if (!hubEndpoint || this._wsState !== 'connected') {
+      this._setConferenceActive(false);
+      return;
+    }
+    const { active, title } = await resolveCastConferenceState(
+      hubEndpoint,
+      session.topic?.trim() ?? '',
+      this._subscriberName.trim() || session.subscriberName?.trim() || ''
+    );
+    this._setConferenceActive(active, title);
+  }
+
+  private _startConferencePoll(): void {
+    this._stopConferencePoll();
+    void this._syncConferenceActive();
+    this._conferencePollTimer = setInterval(() => {
+      void this._syncConferenceActive();
+    }, CAST_CONFERENCE_POLL_MS);
   }
 
   private _scheduleCastDicomSendLayer(meta: {

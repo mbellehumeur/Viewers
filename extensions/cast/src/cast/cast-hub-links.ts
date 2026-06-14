@@ -27,7 +27,7 @@ export function resolveCastHubAdminUrl(hubEndpoint: string): string {
 
 export function resolveCastConferenceClientUrl(
   hubEndpoint: string,
-  opts?: { topic?: string; subscriberName?: string }
+  opts?: { topic?: string; subscriberName?: string; theme?: string }
 ): string {
   const url = httpUrlFromHubEndpoint(hubEndpoint);
   if (!url) {
@@ -36,16 +36,18 @@ export function resolveCastConferenceClientUrl(
   const conferenceUrl = new URL('/api/hub/conference-client', url.origin);
   const subscriberName = opts?.subscriberName?.trim();
   const topic = opts?.topic?.trim();
+  const theme = opts?.theme?.trim() || 'volview';
   if (subscriberName) {
     conferenceUrl.searchParams.set('subscriberName', subscriberName);
   }
   if (topic) {
     conferenceUrl.searchParams.set('topic', topic);
   }
+  conferenceUrl.searchParams.set('theme', theme);
   return conferenceUrl.href;
 }
 
-export const CAST_CONFERENCE_POPUP_SIZE = { width: 660, height: 500 };
+export const CAST_CONFERENCE_POPUP_SIZE = { width: 380, height: 288 };
 
 export function openCastHubPopup(
   url: string,

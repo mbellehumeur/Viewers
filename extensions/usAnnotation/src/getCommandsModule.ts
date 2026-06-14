@@ -286,6 +286,64 @@ function commandsModule({
         filename: `ultrasound_annotations_${new Date().toISOString().slice(0, 10)}.json`,
       });
     },
+    /**
+     * Publishes ultrasound annotations to Cast peers via annotation-update.
+     */
+    castShareUSAnnotations: async ({
+      labels = [],
+      imageIds = [],
+      rater = '',
+      topic = '',
+    }: {
+      labels?: string[];
+      imageIds?: string[];
+      rater?: string;
+      topic?: string;
+    } = {}) => {
+      const json = actions.generateUSPleuraBLineAnnotationsJSON(labels, imageIds, rater);
+      if (!json) {
+        throw new Error('No ultrasound annotations to share');
+      }
+
+      const castService = (servicesManager.services as { castService?: {
+        castPublish: (message: Record<string, unknown>) => Promise<Response | null>;
+        getSessionConfig: () => { topic?: string };
+      } }).castService;
+      if (!castService?.castPublish) {
+        throw new Error('Cast service is not available');
+      }
+
+      const activeViewportId = viewportGridService.getActiveViewportId();
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(activeViewportId);
+      const imageId = viewport?.getCurrentImageId();
+      const { displaySetService } = servicesManager.services as AppTypes.Services;
+      const activeDisplaySets = displaySetService.getActiveDisplaySets();
+      const displaySet = imageId
+        ? activeDisplaySets.find(ds => ds?.imageIds?.includes(imageId))
+        : activeDisplaySets[0];
+
+      const studyInstanceUID = displaySet?.StudyInstanceUID ?? '';
+      const seriesInstanceUID = displaySet?.SeriesInstanceUID ?? '';
+      const sessionTopic =
+        (topic || '').trim() || castService.getSessionConfig()?.topic?.trim() || '';
+      if (!sessionTopic) {
+        throw new Error('Cast topic is not configured');
+      }
+
+      return castService.castPublish({
+        event: {
+          'hub.topic': sessionTopic,
+          'hub.event': 'annotation-update',
+          context: {
+            schemaVersion: 1,
+            toolName: UltrasoundPleuraBLineTool.toolName,
+            studyInstanceUID,
+            seriesInstanceUID,
+            annotations: json,
+          },
+        },
+      });
+    },
   };
 
   const definitions = {
@@ -321,6 +379,9 @@ function commandsModule({
     },
     downloadJSON: {
       commandFn: actions.downloadUSPleuraBLineAnnotationsJSON,
+    },
+    castShareUSAnnotations: {
+      commandFn: actions.castShareUSAnnotations,
     },
     switchUSAnnotationToPleuraLine: {
       commandFn: actions.switchUSPleuraBLineAnnotationToPleuraLine,

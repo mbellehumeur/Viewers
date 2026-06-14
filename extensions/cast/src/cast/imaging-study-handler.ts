@@ -1,4 +1,8 @@
 import type { CastMessage } from '@kitware/vtk.js/Sources/IO/Core/CastClient';
+import {
+  deleteUsPleuraBLineAnnotations,
+  importUsPleuraBLineAnnotations,
+} from './import-us-annotations';
 import { navigateToCastEmptyViewer, navigateToCastViewer } from './cast-navigate';
 import {
   collectImagingStudyDownloadEntries,
@@ -146,13 +150,18 @@ export class ImagingStudyHandler {
   }
 }
 
-export function handleAnnotationEvent(message: CastMessage): void {
+export function handleAnnotationEvent(
+  message: CastMessage,
+  servicesManager: import('./types').ServicesManagerLike
+): void {
   const hubEvent = getHubEventLower(message.event);
   if (hubEvent !== 'annotation-update' && hubEvent !== 'annotation-delete') {
     return;
   }
-  console.info(
-    `${LOG_PREFIX} ${hubEvent} received (stub handler; measurement sync not implemented)`,
-    message.event?.context
-  );
+  const context = message.event?.context;
+  if (hubEvent === 'annotation-delete') {
+    deleteUsPleuraBLineAnnotations(servicesManager);
+    return;
+  }
+  importUsPleuraBLineAnnotations(servicesManager, context);
 }

@@ -139,13 +139,13 @@ export function buildTotalSegmentatorSendManifest(
 
   if (!files.length) {
     throw new Error(
-      'No downloadable HTTP(S) URLs for the active series (local blob/wadouri data cannot be sent without binary attach)'
+      'No HTTP URLs for the active series — TotalSegmentator needs shared remote URLs (DICOMweb or IDC). Local blob or Cast-ingested data without _castSourceUrl cannot be sent URL-only.'
     );
   }
 
   if (missing.length) {
     throw new Error(
-      `Missing downloadable URLs for ${missing.length} instance(s); cannot send series without binary attach`
+      `Missing HTTP URLs for ${missing.length} instance(s). TotalSegmentator needs shared remote URLs (DICOMweb or IDC) for every slice in the series.`
     );
   }
 

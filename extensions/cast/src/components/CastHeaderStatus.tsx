@@ -23,11 +23,15 @@ import {
   resolveCastHubAdminUrl,
 } from '../cast/cast-hub-links';
 
-function castConnectionIconStyle(wsState: string): {
+function castConnectionIconStyle(
+  wsState: string,
+  conferenceActive: boolean
+): {
   colorClass: string;
   iconClass: string;
   showDisconnectedMark: boolean;
   pulse: boolean;
+  conferencePulse: boolean;
 } {
   if (wsState === 'connected') {
     return {
@@ -35,6 +39,7 @@ function castConnectionIconStyle(wsState: string): {
       iconClass: 'h-5 w-5',
       showDisconnectedMark: false,
       pulse: false,
+      conferencePulse: conferenceActive,
     };
   }
   if (wsState === 'connecting') {
@@ -43,6 +48,7 @@ function castConnectionIconStyle(wsState: string): {
       iconClass: 'h-5 w-5',
       showDisconnectedMark: false,
       pulse: true,
+      conferencePulse: false,
     };
   }
   if (wsState === 'error' || wsState === 'disconnected') {
@@ -51,6 +57,7 @@ function castConnectionIconStyle(wsState: string): {
       iconClass: 'h-5 w-5 opacity-70',
       showDisconnectedMark: true,
       pulse: false,
+      conferencePulse: false,
     };
   }
   return {
@@ -58,6 +65,7 @@ function castConnectionIconStyle(wsState: string): {
     iconClass: 'h-5 w-5 opacity-50',
     showDisconnectedMark: true,
     pulse: false,
+    conferencePulse: false,
   };
 }
 
@@ -92,9 +100,25 @@ function CastHeaderStatus() {
     return null;
   }
 
-  const { colorClass, iconClass, showDisconnectedMark, pulse } = castConnectionIconStyle(
-    status.wsState
-  );
+  const wsConnected = status.wsState === 'connected';
+  const canSendToTotalSegmentator =
+    hasOpenStudy && wsConnected && status.totalSegmentatorAvailable;
+
+  const totalSegmentatorMenuSubtitle = (() => {
+    if (!wsConnected) {
+      return undefined;
+    }
+    if (!status.totalSegmentatorAvailable) {
+      return 'Total Segmentator not available';
+    }
+    if (!hasOpenStudy) {
+      return 'Open a study first';
+    }
+    return undefined;
+  })();
+
+  const { colorClass, iconClass, showDisconnectedMark, pulse, conferencePulse } =
+    castConnectionIconStyle(status.wsState, status.conferenceActive);
 
   const openHubAdminPortal = () => {
     const hubEndpoint = castService.getHub().hub_endpoint ?? '';
@@ -108,6 +132,7 @@ function CastHeaderStatus() {
       resolveCastConferenceClientUrl(hubEndpoint, {
         topic: session.topic,
         subscriberName: session.subscriberName,
+        theme: 'volview',
       }),
       'castConferenceClientWindow',
       CAST_CONFERENCE_POPUP_SIZE
@@ -115,7 +140,7 @@ function CastHeaderStatus() {
   };
 
   const openTotalSegmentatorDialog = () => {
-    if (!hasOpenStudy) {
+    if (!canSendToTotalSegmentator) {
       return;
     }
     setTotalSegmentatorDialogOpen(true);
@@ -123,6 +148,15 @@ function CastHeaderStatus() {
 
   return (
     <>
+      <style>{`
+        @keyframes cast-conference-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        .cast-conference-pulse {
+          animation: cast-conference-pulse 1.2s ease-in-out infinite;
+        }
+      `}</style>
       <DropdownMenu>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -134,7 +168,7 @@ function CastHeaderStatus() {
               aria-haspopup="menu"
             >
               <span
-                className={`relative inline-flex items-center ${colorClass} ${pulse ? 'animate-pulse' : ''}`}
+                className={`relative inline-flex items-center ${colorClass} ${pulse ? 'animate-pulse' : ''} ${conferencePulse ? 'cast-conference-pulse' : ''}`}
               >
                 <Icons.Radio className={iconClass} />
                 {showDisconnectedMark ? (
@@ -152,15 +186,26 @@ function CastHeaderStatus() {
             {status.topic ? <div>Topic: {status.topic}</div> : null}
             <div>{status.hubLabel}</div>
             <div>{status.statusText}</div>
+            {status.conferenceActive ? (
+              <div>
+                {status.conferenceTitle
+                  ? `Conference: ${status.conferenceTitle}`
+                  : 'Conference active'}
+              </div>
+            ) : null}
           </div>
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end">
         <DropdownMenuItem
-          disabled={!hasOpenStudy}
+          disabled={!canSendToTotalSegmentator}
           onSelect={openTotalSegmentatorDialog}
+          className="flex flex-col items-start gap-0.5"
         >
-          Total Segmentator
+          <span>Total Segmentator</span>
+          {totalSegmentatorMenuSubtitle ? (
+            <span className="text-muted-foreground text-xs">{totalSegmentatorMenuSubtitle}</span>
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={openConferenceClient}>Conferencing</DropdownMenuItem>
         <DropdownMenuItem onSelect={openHubAdminPortal}>Hub</DropdownMenuItem>
@@ -170,7 +215,8 @@ function CastHeaderStatus() {
       open={totalSegmentatorDialogOpen}
       onOpenChange={setTotalSegmentatorDialogOpen}
       castService={castService}
-      wsConnected={status.wsState === 'connected'}
+      wsConnected={wsConnected}
+      totalSegmentatorAvailable={status.totalSegmentatorAvailable}
     />
     </>
   );

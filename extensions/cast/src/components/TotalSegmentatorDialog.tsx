@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Accordion,
   AccordionContent,
@@ -11,7 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
   Label,
-  ProgressLoadingBar,
   Select,
   SelectContent,
   SelectItem,
@@ -21,6 +20,10 @@ import {
   ToggleGroupItem,
 } from '@ohif/ui-next';
 import CastService from '../services/CastService';
+import {
+  castHeaderStatusEqual,
+  type CastHeaderStatusState,
+} from '../cast/cast-header-status';
 import {
   DEFAULT_TOTAL_SEGMENTATOR_OPTIONS,
   normalizeTotalSegmentatorOptions,
@@ -37,6 +40,7 @@ type TotalSegmentatorDialogProps = {
   onOpenChange: (open: boolean) => void;
   castService: CastService;
   wsConnected: boolean;
+  totalSegmentatorAvailable: boolean;
 };
 
 function TotalSegmentatorDialog({
@@ -44,6 +48,7 @@ function TotalSegmentatorDialog({
   onOpenChange,
   castService,
   wsConnected,
+  totalSegmentatorAvailable,
 }: TotalSegmentatorDialogProps) {
   const taskItems = useMemo(() => taskSelectItems(), []);
   const [form, setForm] = useState<TotalSegmentatorOptions>({
@@ -51,6 +56,10 @@ function TotalSegmentatorDialog({
   });
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
+  const [headerStatus, setHeaderStatus] = useState<CastHeaderStatusState>(() =>
+    castService.getCastHeaderStatus()
+  );
+  const jobStatusRef = useRef<HTMLTextAreaElement>(null);
 
   const supportedQualityModes = useMemo(
     () => getSupportedQualityModesForTask(form.task),
@@ -64,7 +73,33 @@ function TotalSegmentatorDialog({
     setForm({ ...DEFAULT_TOTAL_SEGMENTATOR_OPTIONS });
     setSending(false);
     setSendError('');
-  }, [open]);
+    setHeaderStatus(castService.getCastHeaderStatus());
+  }, [open, castService]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const sync = (next?: CastHeaderStatusState) => {
+      const resolved = next ?? castService.getCastHeaderStatus();
+      setHeaderStatus(prev =>
+        castHeaderStatusEqual(prev, resolved) ? prev : resolved
+      );
+    };
+    sync();
+    const { unsubscribe } = castService.subscribe(CastService.EVENTS.STATUS_CHANGED, sync);
+    return unsubscribe;
+  }, [open, castService]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const textarea = jobStatusRef.current;
+    if (textarea) {
+      textarea.scrollTop = textarea.scrollHeight;
+    }
+  }, [headerStatus.totalSegmentatorJobStatus, open, sending]);
 
   useEffect(() => {
     if (supportedQualityModes.includes(form.quality)) {
@@ -73,13 +108,23 @@ function TotalSegmentatorDialog({
     setForm(prev => ({ ...prev, quality: supportedQualityModes[0] }));
   }, [form.quality, supportedQualityModes]);
 
-  const canSend = wsConnected && !sending;
+  const canSend = wsConnected && totalSegmentatorAvailable && !sending;
 
   const sendTooltip = sending
-    ? 'Sending…'
-    : wsConnected
-      ? 'Send original files to Total Segmentator (URL-only, no binary attach)'
-      : 'Connect to the Cast hub';
+    ? 'Sending study URLs to Total Segmentator…'
+    : !wsConnected
+      ? 'Connect to the Cast hub'
+      : !totalSegmentatorAvailable
+        ? 'Total Segmentator is not available on this topic'
+        : 'Send study URLs to Total Segmentator (no binary upload from OHIF)';
+
+  const jobStatusText = useMemo(() => {
+    const log = headerStatus.totalSegmentatorJobStatus;
+    if (sending) {
+      return log ? `${log}\nSending study URLs…` : 'Sending study URLs…';
+    }
+    return log;
+  }, [headerStatus.totalSegmentatorJobStatus, sending]);
 
   const updateForm = <K extends keyof TotalSegmentatorOptions>(
     key: K,
@@ -94,6 +139,8 @@ function TotalSegmentatorDialog({
     }
     setSending(true);
     setSendError('');
+    castService.clearTotalSegmentatorJobStatus();
+
     try {
       const response = await castService.publishTotalSegmentatorSend(
         normalizeTotalSegmentatorOptions(form)
@@ -106,7 +153,6 @@ function TotalSegmentatorDialog({
         setSendError(`Publish failed (HTTP ${response.status})`);
         return;
       }
-      onOpenChange(false);
     } catch (err) {
       setSendError(
         err instanceof Error ? err.message : 'Failed to send to Total Segmentator'
@@ -118,7 +164,19 @@ function TotalSegmentatorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent
+        className="max-w-2xl"
+        onPointerDownOutside={event => {
+          if (sending || headerStatus.totalSegmentatorJobStatus) {
+            event.preventDefault();
+          }
+        }}
+        onEscapeKeyDown={event => {
+          if (sending) {
+            event.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Total Segmentator</DialogTitle>
         </DialogHeader>
@@ -130,16 +188,27 @@ function TotalSegmentatorDialog({
             onClick={() => void onSend()}
             title={sendTooltip}
           >
-            {sending ? 'Sending…' : 'Send'}
+            {sending ? 'Sending study URLs…' : 'Send'}
           </Button>
-
-          {sending ? <ProgressLoadingBar /> : null}
 
           {sendError ? (
             <p className="text-destructive text-sm" role="alert">
               {sendError}
             </p>
           ) : null}
+
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="ts-job-status">Job Status</Label>
+            <textarea
+              id="ts-job-status"
+              ref={jobStatusRef}
+              readOnly
+              rows={8}
+              value={jobStatusText}
+              className="border-input bg-muted text-foreground min-h-[10rem] w-full resize-y rounded-md border px-3 py-2 font-mono text-xs leading-relaxed"
+              placeholder="Progress lines from Total Segmentator appear here after send."
+            />
+          </div>
 
           <Accordion type="single" collapsible>
             <AccordionItem value="advanced">

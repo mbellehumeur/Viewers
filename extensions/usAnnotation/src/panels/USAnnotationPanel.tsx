@@ -57,6 +57,7 @@ export default function USAnnotationPanel() {
   const [annotatedFrames, setAnnotatedFrames] = useState<any[]>([]);
   const [imageIdsToObserve, setImageIdsToObserve] = useState<string[]>([]);
   const [clipLabels, setClipLabels] = useState<string[]>([]);
+  const [shareStatus, setShareStatus] = useState<'idle' | 'sharing' | 'done' | 'error'>('idle');
 
   useEffect(() => {
     return subscribeCastTopic(castService, topic => {
@@ -117,6 +118,23 @@ export default function USAnnotationPanel() {
     });
   };
 
+  const shareCastAnnotations = async () => {
+    setShareStatus('sharing');
+    try {
+      await commandsManager.runCommand('castShareUSAnnotations', {
+        labels: clipLabels,
+        imageIds: imageIdsToObserve,
+        rater,
+      });
+      setShareStatus('done');
+      window.setTimeout(() => setShareStatus('idle'), 2000);
+    } catch (error) {
+      console.error('Cast share US annotations failed', error);
+      setShareStatus('error');
+      window.setTimeout(() => setShareStatus('idle'), 3000);
+    }
+  };
+
   /**
    * Handles clicking on a row in the annotated frames table
    * Scrolls the viewport to the selected frame
@@ -141,6 +159,24 @@ export default function USAnnotationPanel() {
         <Button variant="ghost" size="sm" className="shrink-0" onClick={() => downloadJSON()}>
           <Icons.Download className="h-4 w-4" />
           <span>{t('JSON')}</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="shrink-0"
+          disabled={shareStatus === 'sharing'}
+          onClick={() => void shareCastAnnotations()}
+        >
+          <Icons.Upload className="h-4 w-4" />
+          <span>
+            {shareStatus === 'sharing'
+              ? t('Sharing')
+              : shareStatus === 'done'
+                ? t('Shared')
+                : shareStatus === 'error'
+                  ? t('Share failed')
+                  : t('Share')}
+          </span>
         </Button>
       </div>
     </PanelSection.Content>
