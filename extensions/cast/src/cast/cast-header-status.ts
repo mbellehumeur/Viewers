@@ -8,6 +8,7 @@ export interface CastHeaderStatusState {
   totalSegmentatorJobStatus: string;
   conferenceActive: boolean;
   conferenceTitle: string;
+  conferenceParticipants: string[];
 }
 
 export function castStatusTextForWsState(wsState?: string): string {
@@ -30,7 +31,8 @@ export function buildCastHeaderStatus(
   totalSegmentatorAvailable = false,
   totalSegmentatorJobStatus = '',
   conferenceActive = false,
-  conferenceTitle = ''
+  conferenceTitle = '',
+  conferenceParticipants: string[] = []
 ): CastHeaderStatusState {
   const trimmedTopic = topic.trim();
   const label = hubLabel.trim() || 'Hub';
@@ -48,6 +50,9 @@ export function buildCastHeaderStatus(
     totalSegmentatorJobStatus,
     conferenceActive,
     conferenceTitle: conferenceActive ? conferenceTitle.trim() : '',
+    conferenceParticipants: conferenceActive
+      ? conferenceParticipants.map((name) => String(name).trim()).filter(Boolean)
+      : [],
   };
 }
 
@@ -64,6 +69,7 @@ export function castHeaderStatusEqual(
     a.totalSegmentatorAvailable === b.totalSegmentatorAvailable &&
     a.totalSegmentatorJobStatus === b.totalSegmentatorJobStatus &&
     a.conferenceActive === b.conferenceActive &&
-    a.conferenceTitle === b.conferenceTitle
+    a.conferenceTitle === b.conferenceTitle &&
+    a.conferenceParticipants.join('\0') === b.conferenceParticipants.join('\0')
   );
 }

@@ -12,16 +12,12 @@ import {
 import { useSystem } from '@ohif/core';
 import CastService from '../services/CastService';
 import TotalSegmentatorDialog from './TotalSegmentatorDialog';
+import ConferenceDialog from './ConferenceDialog';
 import {
   castHeaderStatusEqual,
   type CastHeaderStatusState,
 } from '../cast/cast-header-status';
-import {
-  CAST_CONFERENCE_POPUP_SIZE,
-  openCastHubPopup,
-  resolveCastConferenceClientUrl,
-  resolveCastHubAdminUrl,
-} from '../cast/cast-hub-links';
+import { openCastHubPopup, resolveCastHubAdminUrl } from '../cast/cast-hub-links';
 
 function castConnectionIconStyle(
   wsState: string,
@@ -76,6 +72,7 @@ function CastHeaderStatus() {
     castService ? castService.getCastHeaderStatus() : null
   );
   const [totalSegmentatorDialogOpen, setTotalSegmentatorDialogOpen] = useState(false);
+  const [conferenceDialogOpen, setConferenceDialogOpen] = useState(false);
 
   const activeDisplaySets =
     servicesManager.services.displaySetService?.activeDisplaySets ?? [];
@@ -126,17 +123,7 @@ function CastHeaderStatus() {
   };
 
   const openConferenceClient = () => {
-    const hubEndpoint = castService.getHub().hub_endpoint ?? '';
-    const session = castService.getSessionConfig();
-    openCastHubPopup(
-      resolveCastConferenceClientUrl(hubEndpoint, {
-        topic: session.topic,
-        subscriberName: session.subscriberName,
-        theme: 'volview',
-      }),
-      'castConferenceClientWindow',
-      CAST_CONFERENCE_POPUP_SIZE
-    );
+    setConferenceDialogOpen(true);
   };
 
   const openTotalSegmentatorDialog = () => {
@@ -193,6 +180,11 @@ function CastHeaderStatus() {
                   : 'Conference active'}
               </div>
             ) : null}
+            {status.conferenceActive && status.conferenceParticipants.length ? (
+              <div>
+                Participants: {status.conferenceParticipants.join(', ')}
+              </div>
+            ) : null}
           </div>
         </TooltipContent>
       </Tooltip>
@@ -217,6 +209,12 @@ function CastHeaderStatus() {
       castService={castService}
       wsConnected={wsConnected}
       totalSegmentatorAvailable={status.totalSegmentatorAvailable}
+    />
+    <ConferenceDialog
+      open={conferenceDialogOpen}
+      onOpenChange={setConferenceDialogOpen}
+      castService={castService}
+      wsConnected={wsConnected}
     />
     </>
   );

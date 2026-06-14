@@ -53,6 +53,7 @@ import {
 } from '../../cast/total-segmentator-options';
 import {
   CAST_CONFERENCE_POLL_MS,
+  normalizeConferenceParticipants,
   resolveCastConferenceState,
 } from '../../cast/conference-status';
 import {
@@ -182,6 +183,7 @@ export default class CastService extends PubSubService {
   private _totalSegmentatorJobStatus = '';
   private _conferenceActive = false;
   private _conferenceTitle = '';
+  private _conferenceParticipants: string[] = [];
   private _conferencePollTimer: ReturnType<typeof setInterval> | null = null;
   private _lastBroadcastHeaderStatus: CastHeaderStatusState | null = null;
   private _statusRequestedForSession = false;
@@ -294,7 +296,8 @@ export default class CastService extends PubSubService {
       this._totalSegmentatorAvailable,
       this._totalSegmentatorJobStatus,
       this._conferenceActive,
-      this._conferenceTitle
+      this._conferenceTitle,
+      this._conferenceParticipants
     );
   }
 
@@ -314,6 +317,14 @@ export default class CastService extends PubSubService {
     }
     const current = this._totalSegmentatorJobStatus;
     this._totalSegmentatorJobStatus = current ? `${current}\n${text}` : text;
+  }
+
+  public setConferenceActive(
+    active: boolean,
+    title = '',
+    participants?: string[]
+  ): void {
+    this._setConferenceActive(active, title, participants);
   }
 
   public setSubscriberName(subscriberName: string): void {
@@ -506,7 +517,26 @@ export default class CastService extends PubSubService {
           context && typeof context === 'object' && !Array.isArray(context)
             ? String((context as { title?: unknown }).title ?? '').trim()
             : '';
-        this._setConferenceActive(true, title);
+        const participants = normalizeConferenceParticipants(
+          context && typeof context === 'object' && !Array.isArray(context)
+            ? (context as { participants?: unknown }).participants
+            : undefined
+        );
+        this._setConferenceActive(true, title, participants);
+        void this._syncConferenceActive();
+        return;
+      }
+      if (hubEvent === 'conference-end') {
+        const context = event.context;
+        const leaveTopic =
+          context && typeof context === 'object' && !Array.isArray(context)
+            ? String((context as { leaveTopic?: unknown }).leaveTopic ?? '').trim()
+            : '';
+        const sessionTopic =
+          this._client.getSessionConfig().topic?.trim() ?? '';
+        if (!leaveTopic || !sessionTopic || leaveTopic === sessionTopic) {
+          this._setConferenceActive(false);
+        }
         void this._syncConferenceActive();
         return;
       }
@@ -816,9 +846,22 @@ export default class CastService extends PubSubService {
     this._broadcastEvent(CastService.EVENTS.STATUS_CHANGED, next);
   }
 
-  private _setConferenceActive(active: boolean, title = ''): void {
+  private _setConferenceActive(
+    active: boolean,
+    title = '',
+    participants?: string[]
+  ): void {
     this._conferenceActive = active;
-    this._conferenceTitle = active ? title.trim() : '';
+    if (!active) {
+      this._conferenceTitle = '';
+      this._conferenceParticipants = [];
+      this._broadcastCastStatus();
+      return;
+    }
+    this._conferenceTitle = title.trim();
+    if (participants !== undefined) {
+      this._conferenceParticipants = participants;
+    }
     this._broadcastCastStatus();
   }
 
@@ -836,12 +879,12 @@ export default class CastService extends PubSubService {
       this._setConferenceActive(false);
       return;
     }
-    const { active, title } = await resolveCastConferenceState(
+    const { active, title, participants } = await resolveCastConferenceState(
       hubEndpoint,
       session.topic?.trim() ?? '',
       this._subscriberName.trim() || session.subscriberName?.trim() || ''
     );
-    this._setConferenceActive(active, title);
+    this._setConferenceActive(active, title, participants);
   }
 
   private _startConferencePoll(): void {
