@@ -3,6 +3,7 @@ import type { CastMessage } from '@kitware/vtk.js/Sources/IO/Core/CastClient';
 export type { CastMessage };
 
 export const ID_ACTOR_KEYWORD = 'ID';
+export const WORKLIST_CLIENT_ACTOR_KEYWORD = 'WORKLIST_CLIENT';
 export const DEFAULT_TARGET_ACTOR_KEYWORD = 'EC';
 
 export type CastEvent = NonNullable<CastMessage['event']>;

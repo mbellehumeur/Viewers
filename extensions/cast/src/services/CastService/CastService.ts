@@ -74,6 +74,7 @@ import type {
 import {
   DEFAULT_TARGET_ACTOR_KEYWORD,
   ID_ACTOR_KEYWORD,
+  WORKLIST_CLIENT_ACTOR_KEYWORD,
 } from '../../cast/types';
 import {
   isRequestEvent,
@@ -681,7 +682,7 @@ export default class CastService extends PubSubService {
           context: { dataType: statusDataType },
         },
         'subscriber.actor': ID_ACTOR_KEYWORD,
-        'target.actor': '*',
+        'target.actor': WORKLIST_CLIENT_ACTOR_KEYWORD,
       });
 
       if (!result.ok) {

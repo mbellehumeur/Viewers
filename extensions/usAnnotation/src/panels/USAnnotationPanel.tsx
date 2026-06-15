@@ -376,7 +376,7 @@ export default function USAnnotationPanel() {
         {renderSectorAnnotations()}
       </PanelSection>
 
-      <PanelSection>
+      <PanelSection defaultOpen={false}>
         <PanelSection.Header>{t('Clip level labels')}</PanelSection.Header>
         <PanelSection.Content>
           <ClipLevelLabels selectedLabels={clipLabels} onChange={setClipLabels} />

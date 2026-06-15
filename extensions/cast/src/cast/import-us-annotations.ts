@@ -3,8 +3,8 @@ import type { Types } from '@cornerstonejs/core';
 import {
   UltrasoundPleuraBLineTool,
   annotation,
-  triggerAnnotationRenderForViewportIds,
 } from '@cornerstonejs/tools';
+import { triggerAnnotationRenderForViewportIds } from '@cornerstonejs/tools/utilities';
 
 import { LOG_PREFIX } from './constants';
 import type { ServicesManagerLike } from './types';
