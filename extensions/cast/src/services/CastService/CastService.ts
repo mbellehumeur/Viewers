@@ -41,12 +41,12 @@ import {
   buildTotalSegmentatorSendManifestFromActiveSeries,
 } from '../../cast/publish/build-dicom-send-url-manifest';
 import {
-  buildDicomStowFromActiveSeries,
-  buildDicomStowFromActiveStudy,
-  buildDicomStowFromSlice,
-  buildDicomStowFromStudy,
-  type StowFileEntry,
-} from '../../cast/publish/build-dicom-stow-from-display-set';
+  buildDicomSendFromActiveSeries,
+  buildDicomSendFromActiveStudy,
+  buildDicomSendFromSlice,
+  buildDicomSendFromStudy,
+  type DicomSendFileEntry,
+} from '../../cast/publish/build-dicom-send-from-display-set';
 import {
   normalizeTotalSegmentatorOptions,
   type TotalSegmentatorOptions,
@@ -387,13 +387,13 @@ export default class CastService extends PubSubService {
   }
 
   public async publishDicomSendSeries(): Promise<Response | null> {
-    const files = await buildDicomStowFromActiveSeries(this._servicesManager);
-    return this._publishStowFiles('dicom-send', files);
+    const files = await buildDicomSendFromActiveSeries(this._servicesManager);
+    return this._publishBinaryBatchFiles('dicom-send', files);
   }
 
   public async publishDicomSendStudy(): Promise<Response | null> {
-    const files = await buildDicomStowFromActiveStudy(this._servicesManager);
-    return this._publishStowFiles('dicom-send', files);
+    const files = await buildDicomSendFromActiveStudy(this._servicesManager);
+    return this._publishBinaryBatchFiles('dicom-send', files);
   }
 
   public async publishDicomSendSlice(
@@ -401,29 +401,29 @@ export default class CastService extends PubSubService {
     seriesInstanceUID: string,
     sopInstanceUID: string
   ): Promise<Response | null> {
-    const files = await buildDicomStowFromSlice(
+    const files = await buildDicomSendFromSlice(
       studyInstanceUID,
       seriesInstanceUID,
       sopInstanceUID
     );
-    return this._publishStowFiles('dicom-send', files);
+    return this._publishBinaryBatchFiles('dicom-send', files);
   }
 
-  public async publishDicomStowFromStudyUid(
+  public async publishDicomSendFromStudyUid(
     studyInstanceUID: string,
     scope: 'study' | 'series' = 'series',
     seriesInstanceUID?: string
   ): Promise<Response | null> {
-    const files = await buildDicomStowFromStudy(
+    const files = await buildDicomSendFromStudy(
       studyInstanceUID,
       scope,
       seriesInstanceUID
     );
-    return this._publishStowFiles('dicom-send', files);
+    return this._publishBinaryBatchFiles('dicom-send', files);
   }
 
   /**
-   * Send the active series to TotalSegmentator via URL-only publish (no STOW binary).
+   * Send the active series to TotalSegmentator via URL-only publish (no binary batch).
    */
   public async publishTotalSegmentatorSend(
     options: Partial<TotalSegmentatorOptions> = {}
@@ -451,9 +451,9 @@ export default class CastService extends PubSubService {
     );
   }
 
-  private async _publishStowFiles(
+  private async _publishBinaryBatchFiles(
     hubEvent: 'dicom-send' | 'nifti-send',
-    files: StowFileEntry[]
+    files: DicomSendFileEntry[]
   ): Promise<Response | null> {
     const topic = this._client.getSessionConfig().topic?.trim() ?? '';
     if (!topic) {

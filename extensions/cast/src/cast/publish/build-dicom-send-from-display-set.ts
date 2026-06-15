@@ -1,6 +1,6 @@
 import { DicomMetadataStore } from '@ohif/core';
 
-export type StowFileEntry = {
+export type DicomSendFileEntry = {
   fileName: string;
   mimeType: string;
   data: ArrayBuffer;
@@ -48,11 +48,11 @@ function instanceFileName(instance: OhifInstance, index: number): string {
   return `instance-${index + 1}.dcm`;
 }
 
-export async function buildDicomStowFromStudy(
+export async function buildDicomSendFromStudy(
   studyInstanceUID: string,
   scope: 'study' | 'series' = 'series',
   seriesInstanceUID?: string
-): Promise<StowFileEntry[]> {
+): Promise<DicomSendFileEntry[]> {
   const study = DicomMetadataStore.getStudy(studyInstanceUID);
   if (!study?.series?.length) {
     throw new Error(`No series found for study ${studyInstanceUID}`);
@@ -66,7 +66,7 @@ export async function buildDicomStowFromStudy(
         )
       : study.series;
 
-  const files: StowFileEntry[] = [];
+  const files: DicomSendFileEntry[] = [];
   let index = 0;
 
   for (const series of targetSeries) {
@@ -94,7 +94,7 @@ export async function buildDicomStowFromStudy(
   return files;
 }
 
-export async function buildDicomStowFromActiveSeries(
+export async function buildDicomSendFromActiveSeries(
   servicesManager: {
     services: {
       displaySetService: {
@@ -111,37 +111,37 @@ export async function buildDicomStowFromActiveSeries(
       };
     };
   }
-): Promise<StowFileEntry[]> {
+): Promise<DicomSendFileEntry[]> {
   const activeDisplaySets =
     servicesManager.services.displaySetService.activeDisplaySets ?? [];
   const active = activeDisplaySets[0];
   if (!active?.StudyInstanceUID || !active?.SeriesInstanceUID) {
     throw new Error('No active display set with study/series UIDs');
   }
-  return buildDicomStowFromStudy(
+  return buildDicomSendFromStudy(
     active.StudyInstanceUID,
     'series',
     active.SeriesInstanceUID
   );
 }
 
-export async function buildDicomStowFromActiveStudy(
-  servicesManager: Parameters<typeof buildDicomStowFromActiveSeries>[0]
-): Promise<StowFileEntry[]> {
+export async function buildDicomSendFromActiveStudy(
+  servicesManager: Parameters<typeof buildDicomSendFromActiveSeries>[0]
+): Promise<DicomSendFileEntry[]> {
   const activeDisplaySets =
     servicesManager.services.displaySetService.activeDisplaySets ?? [];
   const active = activeDisplaySets[0];
   if (!active?.StudyInstanceUID) {
     throw new Error('No active display set with study UID');
   }
-  return buildDicomStowFromStudy(active.StudyInstanceUID, 'study');
+  return buildDicomSendFromStudy(active.StudyInstanceUID, 'study');
 }
 
-export async function buildDicomStowFromSlice(
+export async function buildDicomSendFromSlice(
   studyInstanceUID: string,
   seriesInstanceUID: string,
   sopInstanceUID: string
-): Promise<StowFileEntry[]> {
+): Promise<DicomSendFileEntry[]> {
   const series = DicomMetadataStore.getSeries(studyInstanceUID, seriesInstanceUID);
   const instances = (series as { instances?: OhifInstance[] } | undefined)?.instances ?? [];
   const instance = instances.find(item => item.SOPInstanceUID === sopInstanceUID);
