@@ -4,11 +4,13 @@ import { navigateToCastViewer } from './cast-navigate';
 import { CAST_IDC_DATA_SOURCE, LOG_PREFIX } from './constants';
 import {
   filePayloadToArrayBuffer,
-  type FilePayload,
-} from './extract-file-payloads';
+  type ImagingStudyOpenPlan,
+} from '@kitware/vtk.js/Sources/IO/Core/CastClient';
 import { addCastDicomToMetadataStore } from './ingest-cast-dicom';
 import { ingestNiftiFile, ingestNiftiFromUrl } from './ingest-cast-nifti';
-import type { ImagingStudyIdcOpen } from './resolve-imaging-study-open';
+import type { FilePayload } from './types';
+
+export type ImagingStudyIdcOpen = Extract<ImagingStudyOpenPlan, { mode: 'idc' }>;
 
 const IDC_DOWNLOAD_CONCURRENCY = 20;
 

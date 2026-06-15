@@ -10,15 +10,17 @@ import {
   toCastFileEntries,
 } from './collect-imaging-study-downloads';
 import { LOG_PREFIX } from './constants';
-import { getHubEventLower } from './extract-file-payloads';
+import {
+  getHubEventLower,
+  normalizeImagingStudyContext,
+  resolveImagingStudyOpenPlan,
+} from '@kitware/vtk.js/Sources/IO/Core/CastClient';
 import {
   extractInlineOpenFilePayloads,
   loadCastIdcStudyFiles,
   loadCastStudyFilesFromPayloads,
   loadCastStudyFilesFromUrls,
 } from './load-cast-study-files';
-import { normalizeImagingStudyContext } from './normalize-imaging-study-context';
-import { resolveImagingStudyOpenPlan } from './resolve-imaging-study-open';
 import type { CastEvent } from './types';
 
 type DicomIngestCallbacks = {

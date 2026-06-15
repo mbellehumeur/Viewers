@@ -1,9 +1,11 @@
 import {
+  ensureCastSubscribeEvents,
   isHubEndpointInCloud,
   isRunningInCloud,
 } from '@kitware/vtk.js/Sources/IO/Core/CastClient';
 import type { HubConfig } from '@kitware/vtk.js/Sources/IO/Core/CastClient';
-import { requestEventFor } from '../services/CastService/event-names';
+
+export { ensureCastSubscribeEvents };
 
 export type ConfigCastHub = HubConfig & {
   events?: string[];
@@ -22,28 +24,6 @@ export type CastConfig = {
   topic?: string;
   actors?: string[];
 };
-
-export function ensureCastSubscribeEvents(events?: string[]): string[] {
-  if (!events?.length) {
-    return ['*'];
-  }
-  if (events.some(entry => String(entry).trim() === '*')) {
-    return ['*'];
-  }
-  const statusRequest = requestEventFor('STATUS');
-  const normalized = new Set(
-    events.map(entry => String(entry).trim().toLowerCase()).filter(Boolean)
-  );
-  const extras: string[] = [];
-  if (statusRequest && !normalized.has(statusRequest.toLowerCase())) {
-    extras.push(statusRequest);
-    normalized.add(statusRequest.toLowerCase());
-  }
-  if (!normalized.has('status-update')) {
-    extras.push('status-update');
-  }
-  return extras.length ? [...events, ...extras] : [...events];
-}
 
 function hubNameFromConfig(hub: ConfigCastHub): string {
   return typeof hub?.name === 'string' ? hub.name.trim() : '';

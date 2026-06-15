@@ -16,20 +16,20 @@ import {
 } from '@ohif/ui-next';
 import CastService from '../services/CastService';
 import {
+  CAST_CONFERENCE_EXIT_ACK_MS,
+  CAST_CONFERENCE_POLL_MS,
   CAST_CONFERENCE_TITLE_PRESETS,
+  conferenceHostTopic,
   createCastConference,
   deleteCastConference,
-  fetchCastConferenceTopics,
-} from '../cast/conference-api';
-import {
-  type CastConferenceRecord,
-  conferenceHostTopic,
   fetchCastConferences,
+  fetchCastConferenceTopics,
   findActiveCastConference,
   isCastConferenceHost,
+  normalizeConferenceParticipants,
   resolveCastConferenceState,
-  CAST_CONFERENCE_EXIT_ACK_MS,
-} from '../cast/conference-status';
+  type CastConferenceRecord,
+} from '@kitware/vtk.js/Sources/IO/Core/CastClient';
 
 type ConferenceDialogProps = {
   open: boolean;

@@ -5,7 +5,7 @@ import {
   extractFilePayloadsForEvent,
   filePayloadToArrayBuffer,
   getHubEventLower,
-} from './extract-file-payloads';
+} from '@kitware/vtk.js/Sources/IO/Core/CastClient';
 import { navigateToStudy } from './imaging-study-handler';
 import { ingestNiftiFile } from './ingest-cast-nifti';
 

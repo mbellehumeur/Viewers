@@ -3,30 +3,37 @@ import vtkCastClient, {
   type CastClientConfig,
   type CastMessage,
   type HubConfig,
+  applyCastPublishEnvelopeFields,
+  CAST_CONFERENCE_POLL_MS,
+  DEFAULT_CAST_PUBLISH_ENVELOPE_FIELDS,
   generateSubscriberName,
+  getHubEventLower,
+  isRequestEvent,
+  isStatusRequestDataType,
+  normalizeConferenceParticipants,
+  requestEventFor,
+  resolveCastConferenceState,
+  resolveCastFileMessage,
+  resolveCastPublishEnvelopeFields,
+  resolveTargetActorForWire,
+  resolveTargetProductNameForWire,
+  totalSegmentatorAvailableFromStatusResponses,
+  type CastPublishEnvelopeFields,
 } from '@kitware/vtk.js/Sources/IO/Core/CastClient';
 import {
   buildStatusResponsePayload,
-  isStatusRequestDataType,
-  totalSegmentatorAvailableFromStatusResponses,
 } from '../../cast/build-status-response';
 import {
   CAST_PRODUCT_NAME,
   CAST_TOPIC_SESSION_KEY,
   LOG_PREFIX,
+  TOTAL_SEGMENTATOR_PRODUCT_NAME,
 } from '../../cast/constants';
 import {
   CastConfig,
   ensureCastSubscribeEvents,
   resolveCastHub,
 } from '../../cast/config';
-import {
-  applyCastPublishEnvelopeFields,
-  DEFAULT_CAST_PUBLISH_ENVELOPE_FIELDS,
-  type CastPublishEnvelopeFields,
-  resolveCastPublishEnvelopeFields,
-} from '../../cast/envelope-fields';
-import { getHubEventLower } from '../../cast/extract-file-payloads';
 import { buildGetRequestImagePayload, normalizeGetRequestDataType } from '../../cast/get-response-image';
 import { tryApplyPendingUsAnnotations } from '../../cast/import-us-annotations';
 import {
@@ -52,16 +59,10 @@ import {
   type TotalSegmentatorOptions,
 } from '../../cast/total-segmentator-options';
 import {
-  CAST_CONFERENCE_POLL_MS,
-  normalizeConferenceParticipants,
-  resolveCastConferenceState,
-} from '../../cast/conference-status';
-import {
   buildCastHeaderStatus,
   castHeaderStatusEqual,
   type CastHeaderStatusState,
 } from '../../cast/cast-header-status';
-import { resolveCastFileMessage } from '../../cast/resolve-cast-file-message';
 import {
   showImagingStudyOpenLoadingNotification,
   type ImagingStudyOpenResult,
@@ -76,11 +77,6 @@ import {
   ID_ACTOR_KEYWORD,
   WORKLIST_CLIENT_ACTOR_KEYWORD,
 } from '../../cast/types';
-import {
-  isRequestEvent,
-  requestEventFor,
-} from './event-names';
-
 type ExtensionManagerLike = {
   appConfig: {
     cast?: CastConfig;
@@ -251,7 +247,11 @@ export default class CastService extends PubSubService {
       if (wsState === 'connected') {
         if (!this._statusRequestedForSession) {
           this._statusRequestedForSession = true;
-          void this._requestStatus();
+          void this._requestStatus({
+            loadWorklistStudy: true,
+            clearTotalSegmentatorAvailability: true,
+            targetActor: WORKLIST_CLIENT_ACTOR_KEYWORD,
+          });
         }
         this._startConferencePoll();
       } else if (wsState === 'disconnected' || wsState === 'error') {
@@ -450,6 +450,18 @@ export default class CastService extends PubSubService {
       },
       { targetActor: DEFAULT_TARGET_ACTOR_KEYWORD }
     );
+  }
+
+  /**
+   * Probe TotalSegmentator availability via STATUS request to ``TOTALSEG``.
+   */
+  public async requestTotalSegmentatorStatus(): Promise<boolean> {
+    const responses = await this._requestStatus({
+      targetProductName: TOTAL_SEGMENTATOR_PRODUCT_NAME,
+      loadWorklistStudy: false,
+      clearTotalSegmentatorAvailability: true,
+    });
+    return totalSegmentatorAvailableFromStatusResponses(responses);
   }
 
   private async _publishBinaryBatchFiles(
@@ -664,16 +676,27 @@ export default class CastService extends PubSubService {
     );
   }
 
-  private async _requestStatus(): Promise<void> {
+  private async _requestStatus(options?: {
+    targetActor?: string;
+    targetProductName?: string;
+    loadWorklistStudy?: boolean;
+    clearTotalSegmentatorAvailability?: boolean;
+  }): Promise<CastRequestResponseItem[]> {
     const subscriber = this._client.getSessionConfig().subscriberName?.trim() ?? '';
     if (!subscriber) {
-      return;
+      return [];
+    }
+
+    const loadWorklistStudy = options?.loadWorklistStudy ?? true;
+    if (options?.clearTotalSegmentatorAvailability) {
+      this.setTotalSegmentatorAvailable(false);
+      this.clearTotalSegmentatorJobStatus();
     }
 
     try {
       const topic = this._client.getSessionConfig().topic?.trim() ?? '';
       const statusDataType = 'STATUS';
-      const result = await this._client.request({
+      const message: CastMessage = {
         'subscriber.name': subscriber,
         'subscriber.product.name': this._productName,
         event: {
@@ -682,22 +705,42 @@ export default class CastService extends PubSubService {
           context: { dataType: statusDataType },
         },
         'subscriber.actor': ID_ACTOR_KEYWORD,
-        'target.actor': WORKLIST_CLIENT_ACTOR_KEYWORD,
-      });
+      };
+      const wireTargetActor = resolveTargetActorForWire(
+        options?.targetActor ??
+          (loadWorklistStudy ? WORKLIST_CLIENT_ACTOR_KEYWORD : undefined)
+      );
+      if (wireTargetActor !== undefined) {
+        message['target.actor'] = wireTargetActor;
+      }
+      const wireTargetProduct = resolveTargetProductNameForWire(
+        options?.targetProductName
+      );
+      if (wireTargetProduct !== undefined) {
+        message['target.product.name'] = wireTargetProduct;
+      }
+
+      const result = await this._client.request(message);
 
       if (!result.ok) {
         console.warn(`${LOG_PREFIX} STATUS request failed`, result.status);
-        return;
+        return [];
       }
 
       const envelope =
         (result.data && typeof result.data === 'object'
           ? (result.data as CastRequestEnvelope)
           : undefined) ?? {};
-      const responses = Array.isArray(envelope.responses) ? envelope.responses : [];
+      const responses = Array.isArray(envelope.responses)
+        ? (envelope.responses as CastRequestResponseItem[])
+        : [];
       const available = totalSegmentatorAvailableFromStatusResponses(responses);
       this.setTotalSegmentatorAvailable(available);
       this._broadcastCastStatus();
+
+      if (!loadWorklistStudy) {
+        return responses;
+      }
 
       let chosenData: unknown;
       for (const item of responses) {
@@ -719,8 +762,10 @@ export default class CastService extends PubSubService {
       if (chosenData !== undefined) {
         await this._openStudyFromContextData(chosenData);
       }
+      return responses;
     } catch (err) {
       console.error(`${LOG_PREFIX} failed to request STATUS`, err);
+      return [];
     }
   }
 

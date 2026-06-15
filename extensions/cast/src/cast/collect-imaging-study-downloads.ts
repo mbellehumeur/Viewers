@@ -4,9 +4,9 @@ import {
   extractImagingStudyFiles,
   extractNiftiDownloadUrl,
   extractNiftiFilename,
+  normalizeImagingStudyContext,
   type CastImagingStudyFileEntry,
 } from '@kitware/vtk.js/Sources/IO/Core/CastClient';
-import { normalizeImagingStudyContext } from './normalize-imaging-study-context';
 
 export type ImagingStudyDownloadEntry = {
   url: string;

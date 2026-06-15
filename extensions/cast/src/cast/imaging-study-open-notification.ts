@@ -1,7 +1,9 @@
-import { extractVolviewSampleId } from '@kitware/vtk.js/Sources/IO/Core/CastClient';
-import type { CastMessage } from '@kitware/vtk.js/Sources/IO/Core/CastClient';
-import { normalizeImagingStudyContext } from './normalize-imaging-study-context';
-import { resolveImagingStudyOpenPlan } from './resolve-imaging-study-open';
+import {
+  extractVolviewSampleId,
+  normalizeImagingStudyContext,
+  resolveImagingStudyOpenPlan,
+  type CastMessage,
+} from '@kitware/vtk.js/Sources/IO/Core/CastClient';
 import type { CastEvent, ServicesManagerLike } from './types';
 
 function publisherLabel(message: CastMessage): string {

@@ -40,7 +40,6 @@ type TotalSegmentatorDialogProps = {
   onOpenChange: (open: boolean) => void;
   castService: CastService;
   wsConnected: boolean;
-  totalSegmentatorAvailable: boolean;
 };
 
 function TotalSegmentatorDialog({
@@ -48,7 +47,6 @@ function TotalSegmentatorDialog({
   onOpenChange,
   castService,
   wsConnected,
-  totalSegmentatorAvailable,
 }: TotalSegmentatorDialogProps) {
   const taskItems = useMemo(() => taskSelectItems(), []);
   const [form, setForm] = useState<TotalSegmentatorOptions>({
@@ -56,6 +54,7 @@ function TotalSegmentatorDialog({
   });
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
+  const [availabilityChecking, setAvailabilityChecking] = useState(false);
   const [headerStatus, setHeaderStatus] = useState<CastHeaderStatusState>(() =>
     castService.getCastHeaderStatus()
   );
@@ -74,6 +73,16 @@ function TotalSegmentatorDialog({
     setSending(false);
     setSendError('');
     setHeaderStatus(castService.getCastHeaderStatus());
+    let cancelled = false;
+    setAvailabilityChecking(true);
+    void castService.requestTotalSegmentatorStatus().finally(() => {
+      if (!cancelled) {
+        setAvailabilityChecking(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [open, castService]);
 
   useEffect(() => {
@@ -108,15 +117,36 @@ function TotalSegmentatorDialog({
     setForm(prev => ({ ...prev, quality: supportedQualityModes[0] }));
   }, [form.quality, supportedQualityModes]);
 
-  const canSend = wsConnected && totalSegmentatorAvailable && !sending;
+  const totalSegmentatorAvailable = headerStatus.totalSegmentatorAvailable;
+
+  const canSend =
+    wsConnected &&
+    totalSegmentatorAvailable &&
+    !availabilityChecking &&
+    !sending;
+
+  const availabilityMessage = (() => {
+    if (!wsConnected) {
+      return 'Connect to the Cast hub';
+    }
+    if (availabilityChecking) {
+      return 'Checking Total Segmentator availability…';
+    }
+    if (!totalSegmentatorAvailable) {
+      return 'Total Segmentator is not available on this topic';
+    }
+    return '';
+  })();
 
   const sendTooltip = sending
     ? 'Sending study URLs to Total Segmentator…'
-    : !wsConnected
-      ? 'Connect to the Cast hub'
-      : !totalSegmentatorAvailable
-        ? 'Total Segmentator is not available on this topic'
-        : 'Send study URLs to Total Segmentator (no binary upload from OHIF)';
+    : availabilityChecking
+      ? 'Checking Total Segmentator availability…'
+      : !wsConnected
+        ? 'Connect to the Cast hub'
+        : !totalSegmentatorAvailable
+          ? 'Total Segmentator is not available on this topic'
+          : 'Send study URLs to Total Segmentator (no binary upload from OHIF)';
 
   const jobStatusText = useMemo(() => {
     const log = headerStatus.totalSegmentatorJobStatus;
@@ -182,6 +212,20 @@ function TotalSegmentatorDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
+          {availabilityMessage ? (
+            <p
+              className={`text-sm ${
+                availabilityChecking
+                  ? 'text-muted-foreground'
+                  : totalSegmentatorAvailable
+                    ? 'text-green-600'
+                    : 'text-yellow-600'
+              }`}
+              role="status"
+            >
+              {availabilityMessage}
+            </p>
+          ) : null}
           <Button
             type="button"
             disabled={!canSend}

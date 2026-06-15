@@ -17,7 +17,7 @@ import {
   castHeaderStatusEqual,
   type CastHeaderStatusState,
 } from '../cast/cast-header-status';
-import { openCastHubPopup, resolveCastHubAdminUrl } from '../cast/cast-hub-links';
+import { openCastHubPopup, resolveCastHubAdminUrl } from '@kitware/vtk.js/Sources/IO/Core/CastClient';
 
 function castConnectionIconStyle(
   wsState: string,
@@ -98,15 +98,11 @@ function CastHeaderStatus() {
   }
 
   const wsConnected = status.wsState === 'connected';
-  const canSendToTotalSegmentator =
-    hasOpenStudy && wsConnected && status.totalSegmentatorAvailable;
+  const canOpenTotalSegmentatorMenu = wsConnected;
 
   const totalSegmentatorMenuSubtitle = (() => {
     if (!wsConnected) {
       return undefined;
-    }
-    if (!status.totalSegmentatorAvailable) {
-      return 'Total Segmentator not available';
     }
     if (!hasOpenStudy) {
       return 'Open a study first';
@@ -127,7 +123,7 @@ function CastHeaderStatus() {
   };
 
   const openTotalSegmentatorDialog = () => {
-    if (!canSendToTotalSegmentator) {
+    if (!canOpenTotalSegmentatorMenu) {
       return;
     }
     setTotalSegmentatorDialogOpen(true);
@@ -190,7 +186,7 @@ function CastHeaderStatus() {
       </Tooltip>
       <DropdownMenuContent align="end">
         <DropdownMenuItem
-          disabled={!canSendToTotalSegmentator}
+          disabled={!canOpenTotalSegmentatorMenu}
           onSelect={openTotalSegmentatorDialog}
           className="flex flex-col items-start gap-0.5"
         >
@@ -208,7 +204,6 @@ function CastHeaderStatus() {
       onOpenChange={setTotalSegmentatorDialogOpen}
       castService={castService}
       wsConnected={wsConnected}
-      totalSegmentatorAvailable={status.totalSegmentatorAvailable}
     />
     <ConferenceDialog
       open={conferenceDialogOpen}
