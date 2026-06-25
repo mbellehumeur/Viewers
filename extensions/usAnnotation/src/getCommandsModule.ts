@@ -3,6 +3,7 @@ import { Types as OhifTypes, utils } from '@ohif/core';
 import { eventTarget, triggerEvent, utilities } from '@cornerstonejs/core';
 import getInstanceByImageId from './getInstanceByImageId';
 import { setShowPercentage } from './PleuraBlinePercentage';
+import { US_ANNOTATION_EVENTS } from './events';
 
 const { downloadBlob } = utils;
 
@@ -15,9 +16,39 @@ const { transformWorldToIndex } = utilities;
  */
 function commandsModule({
   servicesManager,
+  commandsManager,
 }: OhifTypes.Extensions.ExtensionParams): OhifTypes.Extensions.CommandsModule {
-  const { viewportGridService, toolGroupService, cornerstoneViewportService } =
+  const { viewportGridService, toolGroupService, cornerstoneViewportService, toolbarService } =
     servicesManager.services as AppTypes.Services;
+
+  const activateUSPleuraBLineTool = (viewportId?: string) => {
+    const activeViewportId = viewportId ?? viewportGridService.getActiveViewportId();
+    const toolGroup = toolGroupService.getToolGroupForViewport(activeViewportId);
+
+    if (!toolGroup?.hasTool(UltrasoundPleuraBLineTool.toolName)) {
+      return false;
+    }
+
+    const activeToolName = toolGroup.getActivePrimaryMouseButtonTool();
+
+    if (activeToolName) {
+      const activeToolOptions = toolGroup.getToolConfiguration(activeToolName);
+      activeToolOptions?.disableOnPassive
+        ? toolGroup.setToolDisabled(activeToolName)
+        : toolGroup.setToolPassive(activeToolName);
+    }
+
+    toolGroup.setToolActive(UltrasoundPleuraBLineTool.toolName, {
+      bindings: [{ mouseButton: csToolsEnums.MouseBindings.Primary }],
+    });
+
+    toolbarService.refreshToolbarState({
+      viewportId: activeViewportId,
+      toolGroupId: toolGroup.id,
+    });
+
+    return true;
+  };
 
   const actions = {
     /**
@@ -26,6 +57,16 @@ function commandsModule({
      */
     switchUSPleuraBLineAnnotation: ({ annotationType }) => {
       const activeViewportId = viewportGridService.getActiveViewportId();
+      const activated = activateUSPleuraBLineTool(activeViewportId);
+
+      if (!activated) {
+        commandsManager.runCommand(
+          'setToolActiveToolbar',
+          { toolName: UltrasoundPleuraBLineTool.toolName },
+          'CORNERSTONE'
+        );
+      }
+
       const toolGroup = toolGroupService.getToolGroupForViewport(activeViewportId);
       if (!toolGroup) {
         return;
@@ -33,6 +74,10 @@ function commandsModule({
       const usAnnotation = toolGroup.getToolInstance(UltrasoundPleuraBLineTool.toolName);
       if (usAnnotation) {
         usAnnotation.setActiveAnnotationType(annotationType);
+        triggerEvent(eventTarget, US_ANNOTATION_EVENTS.ANNOTATION_TYPE_CHANGED, {
+          annotationType,
+          viewportId: activeViewportId,
+        });
       }
     },
     /**

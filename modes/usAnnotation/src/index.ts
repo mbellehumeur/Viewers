@@ -192,22 +192,22 @@ function modeFactory({ modeConfiguration }) {
               {
                 commandName: 'switchUSAnnotationToPleuraLine',
                 label: 'Add new pleura line',
-                keys: ['W'],
+                keys: ['w'],
               },
               {
                 commandName: 'switchUSAnnotationToBLine',
                 label: 'Add new B-line',
-                keys: ['S'],
+                keys: ['s'],
               },
               {
                 commandName: 'deleteLastPleuraAnnotation',
                 label: 'Delete last pleura line',
-                keys: ['E'],
+                keys: ['e'],
               },
               {
                 commandName: 'deleteLastBLineAnnotation',
                 label: 'Delete last B-line',
-                keys: ['D'],
+                keys: ['d'],
               },
               {
                 commandName: 'toggleDisplayFanAnnotation',

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Enums as csToolsEnums, UltrasoundPleuraBLineTool } from '@cornerstonejs/tools';
 import { eventTarget, utilities } from '@cornerstonejs/core';
-import { useSystem } from '@ohif/core';
+import { useSystem, HotkeysManager } from '@ohif/core';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -22,6 +22,7 @@ import {
   TabsTrigger,
   Separator,
 } from '@ohif/ui-next';
+import { US_ANNOTATION_EVENTS } from '../events';
 
 /**
  * A side panel that drives the ultrasound annotation workflow.
@@ -31,12 +32,12 @@ import {
  */
 export default function USAnnotationPanel() {
   const { t } = useTranslation('USAnnotationPanel');
-  const { servicesManager, commandsManager } = useSystem();
+  const { servicesManager, commandsManager, hotkeysManager } = useSystem();
 
   /** ──────────────────────────────────────────────────────
    * Local state – purely UI related (no business logic).   */
 
-  const { viewportGridService, cornerstoneViewportService, measurementService } =
+  const { viewportGridService, cornerstoneViewportService, measurementService, toolGroupService } =
     servicesManager.services as AppTypes.Services;
 
   // UI state variables
@@ -44,6 +45,9 @@ export default function USAnnotationPanel() {
   const [autoAdd, setAutoAdd] = useState(true);
   const [showPleuraPct, setShowPleuraPct] = useState(true);
   const [showOverlay, setShowOverlay] = useState(true);
+  const [activeAnnotationType, setActiveAnnotationType] = useState(
+    UltrasoundPleuraBLineTool.USPleuraBLineAnnotationType.BLINE
+  );
 
   // Data state variables
   const [annotatedFrames, setAnnotatedFrames] = useState<any[]>([]);
@@ -58,9 +62,17 @@ export default function USAnnotationPanel() {
    * @param type - The annotation type to switch to
    */
   const switchAnnotation = (type: string) => {
-    commandsManager.runCommand('setToolActive', { toolName: UltrasoundPleuraBLineTool.toolName });
+    setActiveAnnotationType(type);
     commandsManager.runCommand('switchUSAnnotation', { annotationType: type });
   };
+
+  const readActiveAnnotationTypeFromTool = React.useCallback(() => {
+    const activeViewportId = viewportGridService.getActiveViewportId();
+    const toolGroup = toolGroupService.getToolGroupForViewport(activeViewportId);
+    const usAnnotation = toolGroup?.getToolInstance(UltrasoundPleuraBLineTool.toolName);
+
+    return usAnnotation?.getActiveAnnotationType() ?? null;
+  }, [viewportGridService, toolGroupService]);
 
   /**
    * Deletes the last annotation of the specified type
@@ -212,10 +224,7 @@ export default function USAnnotationPanel() {
       <div className="flex flex-col gap-4 p-2">
         <Label>{t('Sector Annotations')}</Label>
         <div className="flex items-center gap-2">
-          <Tabs
-            defaultValue={UltrasoundPleuraBLineTool.USPleuraBLineAnnotationType.BLINE}
-            onValueChange={newValue => switchAnnotation(newValue)}
-          >
+          <Tabs value={activeAnnotationType} onValueChange={switchAnnotation}>
             <TabsList>
               <TabsTrigger value={UltrasoundPleuraBLineTool.USPleuraBLineAnnotationType.PLEURA}>
                 <Icons.Plus /> {t('Pleura line')}
@@ -374,6 +383,67 @@ export default function USAnnotationPanel() {
     },
     [viewportGridService, cornerstoneViewportService, imageIdsToObserve]
   );
+
+  useEffect(() => {
+    const type = readActiveAnnotationTypeFromTool();
+    if (type) {
+      setActiveAnnotationType(type);
+    }
+  }, [readActiveAnnotationTypeFromTool]);
+
+  useEffect(() => {
+    const { unsubscribe } = viewportGridService.subscribe(
+      viewportGridService.EVENTS.ACTIVE_VIEWPORT_ID_CHANGED,
+      () => {
+        const type = readActiveAnnotationTypeFromTool();
+        if (type) {
+          setActiveAnnotationType(type);
+        }
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [viewportGridService, readActiveAnnotationTypeFromTool]);
+
+  useEffect(() => {
+    const onAnnotationTypeChanged = (event: Event) => {
+      const { annotationType } = (event as CustomEvent<{ annotationType: string }>).detail ?? {};
+      if (annotationType) {
+        setActiveAnnotationType(annotationType);
+      }
+    };
+
+    eventTarget.addEventListener(
+      US_ANNOTATION_EVENTS.ANNOTATION_TYPE_CHANGED,
+      onAnnotationTypeChanged
+    );
+
+    return () => {
+      eventTarget.removeEventListener(
+        US_ANNOTATION_EVENTS.ANNOTATION_TYPE_CHANGED,
+        onAnnotationTypeChanged
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    const { unsubscribe } = hotkeysManager.subscribe(
+      HotkeysManager.EVENTS.HOTKEY_PRESSED,
+      ({ commandName }: { commandName: string }) => {
+        if (commandName === 'switchUSAnnotationToPleuraLine') {
+          setActiveAnnotationType(UltrasoundPleuraBLineTool.USPleuraBLineAnnotationType.PLEURA);
+        } else if (commandName === 'switchUSAnnotationToBLine') {
+          setActiveAnnotationType(UltrasoundPleuraBLineTool.USPleuraBLineAnnotationType.BLINE);
+        }
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [hotkeysManager]);
 
   useEffect(() => {
     eventTarget.addEventListener(csToolsEnums.Events.ANNOTATION_MODIFIED, annotationModified);
