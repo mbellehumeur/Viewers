@@ -13,5 +13,17 @@
   "Pleura lines": "Pleura lines",
   "B-lines": "B-lines",
   "JSON": "JSON",
-  "Annotations": "Annotations"
+  "Annotations": "Annotations",
+  "Import JSON": "Import JSON",
+  "Rater": "Rater",
+  "Select rater": "Select rater",
+  "New rater name": "New rater name",
+  "Add": "Add",
+  "Annotation labels": "Annotation labels",
+  "Enter a label and press Enter": "Enter a label and press Enter",
+  "Import JSON error": "Failed to import annotation JSON",
+  "SOPInstanceUID mismatch warning": "Imported file may be for a different instance",
+  "Source": "Source",
+  "Imported": "Imported",
+  "Live": "Live"
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Enums as csToolsEnums, UltrasoundPleuraBLineTool } from '@cornerstonejs/tools';
 import { eventTarget, utilities } from '@cornerstonejs/core';
 import { useSystem, HotkeysManager } from '@ohif/core';
@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import {
   /* Layout */
   PanelSection,
-  ScrollArea,
   /* Controls */
   Label,
   Button,
@@ -21,8 +20,27 @@ import {
   TabsList,
   TabsTrigger,
   Separator,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@ohif/ui-next';
 import { US_ANNOTATION_EVENTS } from '../events';
+import { toPanelRows, validateForViewport, type FrameAnnotation } from '../utils/usAnnotationJson';
+import getInstanceByImageId from '../getInstanceByImageId';
+import { useUSAnnotationStore } from '../stores/useUSAnnotationStore';
+
+const EMPTY_FRAME_ANNOTATIONS: FrameAnnotation[] = [];
+
+type AnnotatedFrameRow = {
+  frame: number;
+  pleura: number;
+  bLine: number;
+  index: number;
+  imageId?: string;
+};
 
 /**
  * A side panel that drives the ultrasound annotation workflow.
@@ -50,9 +68,43 @@ export default function USAnnotationPanel() {
   );
 
   // Data state variables
-  const [annotatedFrames, setAnnotatedFrames] = useState<any[]>([]);
+  const [annotatedFrames, setAnnotatedFrames] = useState<AnnotatedFrameRow[]>([]);
   const [imageIdsToObserve, setImageIdsToObserve] = useState<string[]>([]);
-  const [labels, setLabels] = useState<string[]>([]);
+  const [newRaterName, setNewRaterName] = useState('');
+  const [importWarning, setImportWarning] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const [tableMaxHeight, setTableMaxHeight] = useState(240);
+
+  const updateTableScrollHeight = React.useCallback(() => {
+    requestAnimationFrame(() => {
+      const el = tableScrollRef.current;
+      if (!el) {
+        return;
+      }
+      const top = el.getBoundingClientRect().top;
+      setTableMaxHeight(Math.max(120, window.innerHeight - top - 12));
+    });
+  }, []);
+
+  const raters = useUSAnnotationStore(state => state.raters);
+  const selectedRater = useUSAnnotationStore(state => state.selectedRater);
+  const mergedFrames = useUSAnnotationStore(
+    state => state.merged?.frame_annotations ?? EMPTY_FRAME_ANNOTATIONS
+  );
+  const selectedRaterValue =
+    selectedRater && raters.includes(selectedRater) ? selectedRater : undefined;
+
+  useEffect(() => {
+    updateTableScrollHeight();
+    const timeout = window.setTimeout(updateTableScrollHeight, 350);
+    window.addEventListener('resize', updateTableScrollHeight);
+
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener('resize', updateTableScrollHeight);
+    };
+  }, [updateTableScrollHeight, annotatedFrames.length, selectedRater, raters.length]);
 
   /** ──────────────────────────────────────────────────────
    * Helper – commands bridging back to OHIF services.       */
@@ -129,16 +181,76 @@ export default function USAnnotationPanel() {
   };
   /**
    * Downloads the annotations as a JSON file
-   * Uses the labels and imageIdsToObserve state variables
    */
   const downloadJSON = () => {
-    commandsManager.runCommand('downloadJSON', { labels, imageIds: imageIdsToObserve });
+    commandsManager.runCommand('downloadJSON', {
+      imageIds: imageIdsToObserve,
+      rater: selectedRater,
+    });
   };
 
-  /**
-   * Adds the current image ID to the list of monitored image IDs
-   * Only works when auto-add is disabled
-   */
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const result = commandsManager.runCommand('importJSON', {
+        json,
+        applyFanGeometry: true,
+        applyToViewport: true,
+      });
+
+      if (!result) {
+        return;
+      }
+
+      updateAnnotatedFrames();
+
+      const activeViewportId = viewportGridService.getActiveViewportId();
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(activeViewportId);
+      const imageId = viewport?.getCurrentImageId();
+      const instance = imageId
+        ? getInstanceByImageId(servicesManager.services, imageId)
+        : undefined;
+      const warnings = validateForViewport(
+        {
+          frame_annotations: result.frameAnnotations,
+          SOPInstanceUID: result.metadata?.SOPInstanceUID,
+        },
+        instance?.SOPInstanceUID
+      );
+      setImportWarning(warnings.length > 0 ? t('SOPInstanceUID mismatch warning') : null);
+    } catch {
+      setImportWarning(t('Import JSON error'));
+    }
+  };
+
+  const handleRaterChange = (value: string) => {
+    commandsManager.runCommand('setUSAnnotationSelectedRater', {
+      rater: value,
+      imageIds: imageIdsToObserve,
+    });
+    updateAnnotatedFrames();
+  };
+
+  const handleAddRater = () => {
+    const name = newRaterName.trim();
+    if (!name) {
+      return;
+    }
+    useUSAnnotationStore.getState().addRater(name);
+    setNewRaterName('');
+    handleRaterChange(useUSAnnotationStore.getState().selectedRater);
+  };
   const addCurrentImageId = () => {
     if (!autoAdd) {
       const activeViewportId = viewportGridService.getActiveViewportId();
@@ -215,14 +327,79 @@ export default function USAnnotationPanel() {
             {t('Show pleura percentage')}
           </label>
         </div>
+
+        <div className="flex items-center">
+          <Switch
+            id="show-overlay-switch"
+            className="mr-3"
+            checked={showOverlay}
+            onCheckedChange={() => setShowOverlayCommand(!showOverlay)}
+          />
+          <label
+            htmlFor="show-overlay-switch"
+            className="cursor-pointer"
+            onClick={() => setShowOverlayCommand(!showOverlay)}
+          >
+            {t('Show Overlay')}
+          </label>
+        </div>
+
+        <div className="flex items-center gap-1 pt-1">
+          <Button variant="ghost" onClick={() => downloadJSON()}>
+            <Icons.Download className="h-5 w-5" />
+            <span>{t('JSON')}</span>
+          </Button>
+          <Button variant="ghost" onClick={handleImportClick}>
+            <Icons.Upload className="h-5 w-5" />
+            <span>{t('Import JSON')}</span>
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={handleImportFile}
+          />
+        </div>
+        {importWarning && <p className="text-destructive text-xs">{importWarning}</p>}
       </div>
     </PanelSection.Content>
   );
 
-  const renderSectorAnnotations = () => (
+  const renderAnnotatedFrames = () => (
     <PanelSection.Content>
-      <div className="flex flex-col gap-4 p-2">
-        <Label>{t('Sector Annotations')}</Label>
+      <div className="space-y-3 px-2 pb-2">
+        <div>
+          <Label className="mb-1 block">{t('Rater')}</Label>
+          <Select value={selectedRaterValue} onValueChange={handleRaterChange}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder={t('Select rater')} />
+            </SelectTrigger>
+            <SelectContent>
+              {raters.map(raterName => (
+                <SelectItem key={raterName} value={raterName}>
+                  {raterName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="mt-2 flex gap-2">
+            <Input
+              value={newRaterName}
+              onChange={e => setNewRaterName(e.target.value)}
+              placeholder={t('New rater name')}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  handleAddRater();
+                }
+              }}
+            />
+            <Button variant="outline" onClick={handleAddRater}>
+              {t('Add')}
+            </Button>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
           <Tabs value={activeAnnotationType} onValueChange={switchAnnotation}>
             <TabsList>
@@ -263,95 +440,46 @@ export default function USAnnotationPanel() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-
-        <div className="mt-2 flex items-center gap-2">
-          <Switch
-            id="show-overlay-switch"
-            checked={showOverlay}
-            onCheckedChange={() => setShowOverlayCommand(!showOverlay)}
-          />
-          <label htmlFor="show-overlay-switch" className="text-muted-foreground cursor-pointer">
-            {t('Show Overlay')}
-          </label>
-        </div>
-
-        {/* Divider */}
-        <hr className="border-input/50 border-t" />
+      </div>
+      <div
+        ref={tableScrollRef}
+        className="ohif-scrollbar ohif-scrollbar-stable-gutter overflow-y-auto px-2 pb-2"
+        style={{ maxHeight: tableMaxHeight }}
+      >
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="text-muted-foreground border-input/50 bg-background sticky top-0 z-10 border-b">
+              <th className="py-2 px-2 text-left font-normal">{t('Frame')}</th>
+              <th className="py-2 px-2 text-center font-normal">{t('Pleura lines')}</th>
+              <th className="py-2 px-2 text-center font-normal">{t('B-lines')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {annotatedFrames.map(item => (
+              <tr
+                key={item.frame}
+                className="border-input/50 border-b"
+                onClick={() => handleRowClick(item)}
+                style={{ cursor: 'pointer' }}
+              >
+                <td className="py-2 px-2">{item.frame + 1}</td>
+                <td className="py-2 px-2 text-center">{item.pleura}</td>
+                <td className="py-2 px-2 text-center">{item.bLine}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </PanelSection.Content>
   );
 
-  const renderAnnotatedFrames = () => (
-    <ScrollArea className="h-full">
-      <PanelSection.Content>
-        <div className="mb-4 flex items-center justify-between">
-          {/* <Button
-            variant="ghost"
-            size="sm"
-            className="text-blue-300"
-            disabled={autoAdd}
-            onClick={addCurrentImageId}
-          >
-            <Icons.Plus className="mr-2" /> Add current frame
-          </Button> */}
-          <Button variant="ghost" onClick={() => downloadJSON()}>
-            <Icons.Download className="h-5 w-5" />
-            <span>{t('JSON')}</span>
-          </Button>
-          <Button variant="ghost" onClick={() => setShowOverlayCommand(!showOverlay)}>
-            {showOverlay ? <Icons.Hide className="h-5 w-5" /> : <Icons.Show className="h-5 w-5" />}
-          </Button>
-        </div>
-        <div className="w-full overflow-hidden">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="text-muted-foreground border-input/50 border-b">
-                <th></th>
-                <th className="py-2 px-2 text-left font-normal">{t('Frame')}</th>
-                <th className="py-2 px-2 text-center font-normal">{t('Pleura lines')}</th>
-                <th className="py-2 px-2 text-center font-normal">{t('B-lines')}</th>
-                <th className="w-10"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {annotatedFrames.map(item => (
-                <tr
-                  key={item.frame}
-                  className={`border-input/50 border-b ${
-                    item.frame === 5 ? 'bg-cyan-800 bg-opacity-30' : ''
-                  }`}
-                  onClick={() => handleRowClick(item)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <td className="py-2 px-2">{item.index}</td>
-                  <td className="py-2 px-2">{item.frame + 1}</td>
-                  <td className="py-2 px-2 text-center">{item.pleura}</td>
-                  <td className="py-2 px-2 text-center">{item.bLine}</td>
-                  <td className="py-2 px-2 text-right">
-                    {item.frame === 5 && (
-                      <div className="flex items-center justify-end">
-                        <Button variant="ghost" className="p-0">
-                          <Icons.EyeVisible />
-                        </Button>
-                        <Button variant="ghost" className="ml-2 p-0">
-                          <Icons.More />
-                        </Button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </PanelSection.Content>
-    </ScrollArea>
-  );
-
-  const updateAnnotatedFrames = () => {
+  const getLivePanelRows = React.useCallback((): AnnotatedFrameRow[] => {
     const activeViewportId = viewportGridService.getActiveViewportId();
     const viewport = cornerstoneViewportService.getCornerstoneViewport(activeViewportId);
-    // copying to avoid mutating the original array
+    if (!viewport) {
+      return [];
+    }
+
     const imageIdsMonitored = [...imageIdsToObserve];
     const imageIdFilter = (imageId: string) => {
       if (imageIdsMonitored.length === 0) {
@@ -361,27 +489,42 @@ export default function USAnnotationPanel() {
     };
     const mapping = UltrasoundPleuraBLineTool.countAnnotations(viewport.element, imageIdFilter);
     if (!mapping) {
-      setAnnotatedFrames([]);
-      return;
+      return [];
     }
-    const keys = Array.from(mapping.keys());
-    const updatedFrames = keys.map((key, index) => {
+
+    return Array.from(mapping.keys()).map((key, index) => {
       const { pleura, bLine, frame } = mapping.get(key) || { pleura: 0, bLine: 0, frame: 0 };
       return { imageId: key, index: index + 1, frame, pleura, bLine };
     });
-    setAnnotatedFrames(updatedFrames);
-  };
+  }, [viewportGridService, cornerstoneViewportService, imageIdsToObserve]);
+
+  const updateAnnotatedFrames = React.useCallback(() => {
+    const { merged, selectedRater: rater } = useUSAnnotationStore.getState();
+    const frames = merged?.frame_annotations;
+    if (frames?.length && rater) {
+      setAnnotatedFrames(toPanelRows(frames, 'imported', rater));
+      return;
+    }
+
+    setAnnotatedFrames(getLivePanelRows());
+  }, [getLivePanelRows]);
   /**
    * Callback function that is called when an annotation is modified
    * Updates the annotatedFrames state with the latest annotation data
    */
   const annotationModified = React.useCallback(
     event => {
-      if (event.detail.annotation.metadata.toolName === UltrasoundPleuraBLineTool.toolName) {
-        updateAnnotatedFrames();
+      const annotation = event?.detail?.annotation;
+      if (annotation?.metadata?.toolName !== UltrasoundPleuraBLineTool.toolName) {
+        return;
       }
+
+      commandsManager.runCommand('syncUSAnnotationsToStore', {
+        imageIds: imageIdsToObserve,
+      });
+      updateAnnotatedFrames();
     },
-    [viewportGridService, cornerstoneViewportService, imageIdsToObserve]
+    [commandsManager, imageIdsToObserve, updateAnnotatedFrames]
   );
 
   useEffect(() => {
@@ -392,6 +535,10 @@ export default function USAnnotationPanel() {
   }, [readActiveAnnotationTypeFromTool]);
 
   useEffect(() => {
+    updateAnnotatedFrames();
+  }, [updateAnnotatedFrames, mergedFrames, selectedRater]);
+
+  useEffect(() => {
     const { unsubscribe } = viewportGridService.subscribe(
       viewportGridService.EVENTS.ACTIVE_VIEWPORT_ID_CHANGED,
       () => {
@@ -399,13 +546,14 @@ export default function USAnnotationPanel() {
         if (type) {
           setActiveAnnotationType(type);
         }
+        updateAnnotatedFrames();
       }
     );
 
     return () => {
       unsubscribe();
     };
-  }, [viewportGridService, readActiveAnnotationTypeFromTool]);
+  }, [viewportGridService, readActiveAnnotationTypeFromTool, updateAnnotatedFrames]);
 
   useEffect(() => {
     const onAnnotationTypeChanged = (event: Event) => {
@@ -465,11 +613,11 @@ export default function USAnnotationPanel() {
    *  🖼  Final Render                                      */
   return (
     <div
-      className="text-foreground h-full bg-background"
+      className="text-foreground flex h-full min-h-0 flex-col bg-background"
       style={{ minWidth: 240, maxWidth: 480, width: '100%' }}
     >
       {/* Workflow */}
-      <PanelSection>
+      <PanelSection className="flex-shrink-0">
         <PanelSection.Header>{t('Workflow')}</PanelSection.Header>
         {renderWorkflowToggles()}
       </PanelSection>
@@ -480,14 +628,8 @@ export default function USAnnotationPanel() {
         {renderWorkflowProgress()}
       </PanelSection> */}
 
-      {/* Annotations */}
-      <PanelSection>
-        <PanelSection.Header>{t('Annotations')}</PanelSection.Header>
-        {renderSectorAnnotations()}
-      </PanelSection>
-
       {/* Annotated frames */}
-      <PanelSection className="flex-1">
+      <PanelSection className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <PanelSection.Header>{t('Annotated Frames')}</PanelSection.Header>
         {renderAnnotatedFrames()}
       </PanelSection>

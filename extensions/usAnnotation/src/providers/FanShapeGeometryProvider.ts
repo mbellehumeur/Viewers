@@ -7,7 +7,7 @@ class FanShapeGeometryProvider {
   }
   get(query, imageId) {
     if (query !== 'ultrasoundFanShapeGeometry') {
-      return null;
+      return undefined;
     }
     const instance = getInstanceByImageId(this.services, imageId);
     // here you can add your logic to retrieve the fan shape geometry
@@ -21,7 +21,7 @@ class FanShapeGeometryProvider {
     //   outerRadius: number; // The outer radius of the fan shape (e.g. 650)
     // };
 
-    return null;
+    return undefined;
   }
 }
 

@@ -1,6 +1,7 @@
 import { id } from './id';
 import getPanelModule from './getPanelModule';
 import getCommandsModule from './getCommandsModule';
+import init from './init/init';
 import { showPercentage, setShowPercentage } from './PleuraBlinePercentage';
 /**
  * You can remove any of the following modules if you don't need them.
@@ -26,6 +27,7 @@ export default {
    * options, and defaultContext is the default context for the command to run against.
    */
   getCommandsModule,
+  preRegistration: init,
 };
 
 export { showPercentage, setShowPercentage };
