@@ -40,13 +40,14 @@ import {
   OrientationMarkerTool,
   WindowLevelRegionTool,
   SegmentSelectTool,
-  ClickSegmentTool,
   SegmentLabelTool,
   LivewireContourSegmentationTool,
   SculptorTool,
   SplineContourSegmentationTool,
   LabelMapEditWithContourTool,
 } from '@cornerstonejs/tools';
+// ClickSegmentTool ships in @cornerstonejs/tools 5.4.x; absent on older linked cs3d branches.
+const ClickSegmentTool = undefined;
 import { LabelmapSlicePropagationTool, MarkerLabelmapTool } from '@cornerstonejs/ai';
 import * as polySeg from '@cornerstonejs/polymorphic-segmentation';
 
@@ -114,7 +115,9 @@ export default function initCornerstoneTools(configuration = {}) {
   addTool(SegmentLabelTool);
   addTool(LabelmapSlicePropagationTool);
   addTool(MarkerLabelmapTool);
-  addTool(ClickSegmentTool);
+  if (ClickSegmentTool) {
+    addTool(ClickSegmentTool);
+  }
   addTool(LivewireContourSegmentationTool);
   addTool(SculptorTool);
   addTool(SplineContourSegmentationTool);
@@ -178,7 +181,7 @@ const toolNames = {
   SegmentLabel: SegmentLabelTool.toolName,
   LabelmapSlicePropagation: LabelmapSlicePropagationTool.toolName,
   MarkerLabelmap: MarkerLabelmapTool.toolName,
-  ClickSegment: ClickSegmentTool.toolName,
+  ...(ClickSegmentTool ? { ClickSegment: ClickSegmentTool.toolName } : {}),
   LivewireContourSegmentation: LivewireContourSegmentationTool.toolName,
   SculptorTool: SculptorTool.toolName,
   SplineContourSegmentation: SplineContourSegmentationTool.toolName,

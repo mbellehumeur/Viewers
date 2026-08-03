@@ -222,6 +222,12 @@ const bindings = [
     keys: ['a'],
     isEditable: true,
   },
+  {
+    commandName: 'toggleStatsOverlay',
+    label: 'Toggle Stats Overlay',
+    keys: ['ctrl+shift+d'],
+    isEditable: true,
+  },
 ];
 
 export default bindings;

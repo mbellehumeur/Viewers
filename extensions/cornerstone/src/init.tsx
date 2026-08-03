@@ -13,6 +13,8 @@ import {
   getEnabledElement,
   Settings,
   utilities as csUtilities,
+  registerWebGPURenderBackend,
+  isWebGPURenderingAvailable,
 } from '@cornerstonejs/core';
 import {
   cornerstoneStreamingImageVolumeLoader,
@@ -32,6 +34,8 @@ import {
   resolveNextViewportsEnabled,
   resolveViewportRendering,
   setViewportRenderingOverrides,
+  resolveVolume3DRenderMode,
+  setVolume3DRenderModeOverride,
 } from './utils/nextViewports';
 import interleaveCenterLoader from './utils/interleaveCenterLoader';
 import nthLoader from './utils/nthLoader';
@@ -68,16 +72,23 @@ export default async function init({
   // Note: this should run first before initializing the cornerstone
   // DO NOT CHANGE THE ORDER
 
-  // Enable cornerstone's stats/debug overlay when `?debug=true` is in the URL.
-  // Mirrors the cornerstone demo trigger so the same overlay is available inside
-  // OHIF: FPS / MS / MB panels plus the per-viewport actor & mapper bindings.
+  // Stats overlay is off by default; toggle with the hotkey (ctrl+shift+d) or ?debug=true.
   const statsOverlay =
+    Boolean(appConfig.statsOverlay) ||
     new URLSearchParams(window.location.search).get('debug') === 'true';
 
   await cs3DInit({
     peerImport: appConfig.peerImport,
     debug: { statsOverlay },
   });
+
+  if (isWebGPURenderingAvailable()) {
+    try {
+      registerWebGPURenderBackend();
+    } catch (error) {
+      console.warn('WebGPU backend registration failed:', error);
+    }
+  }
 
   cornerstone.setUseCPURendering(Boolean(appConfig.useCPURendering));
 
@@ -113,6 +124,12 @@ export default async function init({
     }
   }
   setViewportRenderingOverrides(renderBackendByViewportType);
+
+  setVolume3DRenderModeOverride(
+    resolveVolume3DRenderMode(
+      (genericViewportsConfig as { renderMode?: unknown }).renderMode
+    )
+  );
 
   cornerstone.setConfiguration({
     ...cornerstone.getConfiguration(),

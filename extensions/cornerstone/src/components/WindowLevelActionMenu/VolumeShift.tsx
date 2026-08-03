@@ -4,7 +4,7 @@ import { Numeric } from '@ohif/ui-next';
 import { useSystem } from '@ohif/core';
 import { useTranslation } from 'react-i18next';
 
-export function VolumeShift({ viewportId }: VolumeShiftProps): ReactElement {
+export function VolumeShift({ viewportId }: VolumeShiftProps): ReactElement | null {
   const { servicesManager, commandsManager } = useSystem();
   const { cornerstoneViewportService } = servicesManager.services;
   const [minShift, setMinShift] = useState<number | null>(null);
@@ -18,12 +18,12 @@ export function VolumeShift({ viewportId }: VolumeShiftProps): ReactElement {
   const prevShiftRef = useRef<number>(shift);
 
   const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
-  const { actor } = viewport.getActors()[0];
-  const ofun = actor.getProperty().getScalarOpacity(0);
+  const actor = viewport?.getActors?.()?.[0]?.actor;
+  const ofun = actor?.getProperty?.()?.getScalarOpacity?.(0);
   const { t } = useTranslation('WindowLevelActionMenu');
 
   useEffect(() => {
-    if (isBlocking) {
+    if (isBlocking || !ofun) {
       return;
     }
     const range = ofun.getRange();
@@ -40,6 +40,9 @@ export function VolumeShift({ viewportId }: VolumeShiftProps): ReactElement {
 
   const onChangeRange = useCallback(
     newShift => {
+      if (!viewport) {
+        return;
+      }
       const shiftDifference = newShift - prevShiftRef.current;
       prevShiftRef.current = newShift;
       viewport.shiftedBy = newShift;
@@ -51,6 +54,10 @@ export function VolumeShift({ viewportId }: VolumeShiftProps): ReactElement {
     },
     [commandsManager, viewportId, viewport]
   );
+
+  if (!actor || !ofun) {
+    return null;
+  }
 
   return (
     <div className="my-1 mt-2 flex flex-col space-y-2">

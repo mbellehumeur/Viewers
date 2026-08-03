@@ -3,6 +3,9 @@ import {
   utilities as csUtils,
   Types as CoreTypes,
   getRenderingEngines,
+  toggleStatsOverlay,
+  setFuberlinVolume3DRenderMode,
+  isFuberlinVolume3DRenderMode,
 } from '@cornerstonejs/core';
 import {
   ToolGroupManager,
@@ -908,6 +911,10 @@ function commandsModule({
       viewports.forEach((_, index) => cineService.setCine({ id: index, isPlaying: false }));
     },
 
+    toggleStatsOverlay: () => {
+      toggleStatsOverlay();
+    },
+
     setViewportWindowLevel({
       viewportId,
       windowWidth,
@@ -1469,6 +1476,21 @@ function commandsModule({
       }
       ops.setVolumeLighting(viewport, options);
       viewport.render();
+    },
+
+    /**
+     * Set mview raymarch mode for a fuberlin Volume3D present
+     * (surface | composite | mip).
+     */
+    setFuberlinVolumeRenderMode: ({ viewportId, mode }) => {
+      if (!viewportId || !isFuberlinVolume3DRenderMode(mode)) {
+        return;
+      }
+      if (!setFuberlinVolume3DRenderMode(viewportId, mode)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
     },
     resetCrosshairs: ({ viewportId }) => {
       const crosshairInstances = [];
@@ -2565,6 +2587,9 @@ function commandsModule({
     toggleCine: {
       commandFn: actions.toggleCine,
     },
+    toggleStatsOverlay: {
+      commandFn: actions.toggleStatsOverlay,
+    },
     arrowTextCallback: {
       commandFn: actions.arrowTextCallback,
     },
@@ -2594,6 +2619,9 @@ function commandsModule({
     },
     setVolumeLighting: {
       commandFn: actions.setVolumeLighting,
+    },
+    setFuberlinVolumeRenderMode: {
+      commandFn: actions.setFuberlinVolumeRenderMode,
     },
     resetCrosshairs: {
       commandFn: actions.resetCrosshairs,

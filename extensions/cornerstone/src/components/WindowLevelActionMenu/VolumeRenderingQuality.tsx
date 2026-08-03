@@ -27,9 +27,12 @@ export function VolumeRenderingQuality({
 
   useEffect(() => {
     const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
-    const { actor } = viewport.getActors()[0];
-    const mapper = actor.getMapper();
-    const image = mapper.getInputData();
+    const actor = viewport?.getActors?.()?.[0]?.actor;
+    const mapper = actor?.getMapper?.();
+    const image = mapper?.getInputData?.();
+    if (!mapper || !image) {
+      return;
+    }
     const spacing = image.getSpacing();
     const sampleDistance = mapper.getSampleDistance();
     const averageSpacing = spacing.reduce((a, b) => a + b) / 3.0;

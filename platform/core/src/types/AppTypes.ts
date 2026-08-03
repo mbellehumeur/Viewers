@@ -165,6 +165,12 @@ declare global {
          */
         viewportRendering?: string | Record<string, string>;
       };
+      /**
+       * Enable cornerstone's stats/debug overlay (FPS, MS, MB, render-mode bindings).
+       * Off by default; toggle at runtime with the `toggleStatsOverlay` command / hotkey.
+       * `?debug=true` also enables it for the session when this is false.
+       */
+      statsOverlay?: boolean;
       useCursors?: boolean;
       maxCacheSize?: number;
       max3DTextureSize?: number;

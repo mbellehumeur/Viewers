@@ -138,6 +138,63 @@ export function getViewportRenderingOverride(viewportType: string): string | und
   return renderBackendByViewportType[viewportType?.toLowerCase()];
 }
 
+/** Known Volume3D GenericViewport renderMode wire ids. */
+const VOLUME_3D_RENDER_MODES = new Set([
+  'vtkVolume3d',
+  'webgpuVolume3d',
+  'fuberlinVolume3D',
+  'vtkGeometry3d',
+]);
+
+/**
+ * Optional Volume3D `renderMode` override from `?renderMode=<mode>` (exact wire
+ * id, e.g. `fuberlinVolume3D`). Captured at init; when set, NextViewportBackend
+ * uses it instead of deriving mode from `viewportRendering`.
+ */
+let volume3DRenderModeOverride: string | undefined;
+
+export function setVolume3DRenderModeOverride(mode: string | undefined): void {
+  volume3DRenderModeOverride = mode;
+}
+
+export function getVolume3DRenderModeOverride(): string | undefined {
+  return volume3DRenderModeOverride;
+}
+
+/**
+ * Resolves `?renderMode=` for Volume3D. Accepts known modes; case-insensitive
+ * match falls back to the canonical wire id. Returns undefined when absent.
+ */
+export function resolveVolume3DRenderMode(
+  appConfigValue?: unknown
+): string | undefined {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('renderMode')) {
+      const value = params.get('renderMode')?.trim();
+      if (value && VOLUME_3D_RENDER_MODES.has(value)) {
+        return value;
+      }
+      if (value) {
+        const matched = [...VOLUME_3D_RENDER_MODES].find(
+          (mode) => mode.toLowerCase() === value.toLowerCase()
+        );
+        if (matched) {
+          return matched;
+        }
+      }
+    }
+  } catch {
+    // SSR / non-browser
+  }
+
+  if (typeof appConfigValue === 'string' && VOLUME_3D_RENDER_MODES.has(appConfigValue)) {
+    return appConfigValue;
+  }
+
+  return undefined;
+}
+
 /**
  * Reads a boolean opt-in URL query param, falling back to a config value when
  * the param is absent. `?param` (no value), `=true`, or `=1` enable it; any

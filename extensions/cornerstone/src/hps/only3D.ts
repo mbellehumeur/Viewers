@@ -47,7 +47,9 @@ export const only3D = {
             viewportType: 'volume3d',
             orientation: 'coronal',
             customViewportProps: {
-              hideOverlays: true,
+              // Overlays enabled so config can show the live viewport type badge
+              // (volume3d vs volume3d next) via viewportOverlay.topRight.
+              hideOverlays: false,
               syncGroups: [HYDRATE_SEG_SYNC_GROUP],
             },
           },

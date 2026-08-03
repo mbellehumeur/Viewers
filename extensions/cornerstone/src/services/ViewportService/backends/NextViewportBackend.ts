@@ -9,7 +9,10 @@ import {
 import type { RenderBackendValue } from '@cornerstonejs/core';
 import { utilities as csToolsUtils } from '@cornerstonejs/tools';
 import { isVolume3DViewportType } from '../../../utils/getLegacyViewportType';
-import { getViewportRenderingOverride } from '../../../utils/nextViewports';
+import {
+  getViewportRenderingOverride,
+  getVolume3DRenderModeOverride,
+} from '../../../utils/nextViewports';
 import type ViewportInfo from '../Viewport';
 import type {
   Presentations,
@@ -451,9 +454,8 @@ export class NextViewportBackend implements IViewportBackend {
     overlayProcessingResults: VolumeMountContext['overlayProcessingResults']
   ): Promise<void> {
     const orientation = viewportInfo.getOrientation();
-    // A native VOLUME_3D_NEXT viewport renders the volume as a 3D VTK volume
-    // (renderMode 'vtkVolume3d'), not a reformatted planar slice; its appearance is
-    // driven by a volume-rendering preset, not orientation/role.
+    // A native VOLUME_3D_NEXT viewport renders true 3D volume rendering, not a
+    // reformatted planar slice; choose the 3D render mode by backend.
     const is3D = (viewport as { type?: string }).type === csEnums.ViewportType.VOLUME_3D_NEXT;
     const nativeViewport = viewport as unknown as {
       setDisplaySets: (
@@ -467,7 +469,11 @@ export class NextViewportBackend implements IViewportBackend {
       displaySetId: string;
       options: Record<string, unknown>;
     }> = [];
-    const volumeRenderBackend = is3D ? undefined : getMountRenderBackend('orthographic');
+    const volumeRenderBackend = getMountRenderBackend('orthographic');
+    const renderModeOverride = getVolume3DRenderModeOverride();
+    const volume3DRenderMode =
+      renderModeOverride ??
+      (volumeRenderBackend === 'webgpu' ? 'webgpuVolume3d' : 'vtkVolume3d');
 
     // First pass: register each dataId and build the COMPLETE entry set. The native
     // PlanarViewport.setDisplaySets has replace semantics (removeReplaceableData), so
@@ -493,7 +499,7 @@ export class NextViewportBackend implements IViewportBackend {
       setDisplaySetsEntries.push({
         displaySetId: dataId,
         options: is3D
-          ? { renderMode: 'vtkVolume3d' }
+          ? { renderMode: volume3DRenderMode }
           : {
               orientation,
               role: index === 0 ? 'source' : 'overlay',

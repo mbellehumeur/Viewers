@@ -10,6 +10,7 @@ import WorkList from './WorkList/WorkList';
 import LegacyWorkList from './LegacyWorkList/LegacyWorkList';
 import DataSourceWrapper from './DataSourceWrapper';
 import Local from './Local';
+import CatHead from './CatHead';
 import Debug from './Debug';
 import NotFound from './NotFound';
 import buildModeRoutes from './buildModeRoutes';
@@ -90,6 +91,10 @@ const bakedInRoutes = [
   {
     path: `/localbasic`,
     children: Local.bind(null, { modePath: 'viewer/dicomlocal' }),
+  },
+  {
+    path: `/cathead`,
+    children: CatHead,
   },
 ];
 

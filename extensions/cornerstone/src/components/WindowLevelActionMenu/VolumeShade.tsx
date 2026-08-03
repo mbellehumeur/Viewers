@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 export function VolumeShade({
   viewportId,
   onClickShade = bool => {},
-}: VolumeShadeProps): ReactElement {
+}: VolumeShadeProps): ReactElement | null {
   const { t } = useTranslation('WindowLevelActionMenu');
   const { servicesManager, commandsManager } = useSystem();
   const { cornerstoneViewportService } = servicesManager.services;
@@ -22,12 +22,21 @@ export function VolumeShade({
   );
   useEffect(() => {
     const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
-    const { actor } = viewport.getActors()[0];
-    const shade = actor.getProperty().getShade();
-    setShade(shade);
-    onClickShade(shade);
-    setKey(key + 1);
-  }, [viewportId, cornerstoneViewportService]);
+    const actor = viewport?.getActors?.()?.[0]?.actor;
+    if (!actor?.getProperty) {
+      return;
+    }
+    const nextShade = actor.getProperty().getShade();
+    setShade(nextShade);
+    onClickShade(nextShade);
+    setKey(prev => prev + 1);
+  }, [viewportId, cornerstoneViewportService]); // eslint-disable-line react-hooks/exhaustive-deps -- onClickShade is optional parent setter
+
+  const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+  const actor = viewport?.getActors?.()?.[0]?.actor;
+  if (!actor) {
+    return null;
+  }
 
   return (
     <>
