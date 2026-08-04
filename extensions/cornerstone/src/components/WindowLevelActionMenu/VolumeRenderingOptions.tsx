@@ -1,12 +1,17 @@
 import React, { ReactElement, useState } from 'react';
 import { AllInOneMenu } from '@ohif/ui-next';
-import { getFuberlinVolume3D } from '@cornerstonejs/core';
+import {
+  getFuberlinVolume3D,
+  getFuberlinVolume3DRenderMode,
+  type FuberlinVolume3DRenderMode as FuberlinMode,
+} from '@cornerstonejs/core';
 import { VolumeRenderingQuality } from './VolumeRenderingQuality';
 import { VolumeShift } from './VolumeShift';
 import { VolumeLighting } from './VolumeLighting';
 import { VolumeShade } from './VolumeShade';
 import { FuberlinVolumeRenderMode } from './FuberlinVolumeRenderMode';
 import { FuberlinVolumeProjection } from './FuberlinVolumeProjection';
+import { FuberlinVolumePresentQuality } from './FuberlinVolumePresentQuality';
 import { FuberlinVolumeThreshold } from './FuberlinVolumeThreshold';
 import { useViewportRendering } from '../../hooks/useViewportRendering';
 import { useTranslation } from 'react-i18next';
@@ -17,12 +22,27 @@ export function VolumeRenderingOptions({ viewportId }: { viewportId?: string } =
   const { t } = useTranslation('WindowLevelActionMenu');
   // Sync — deferred detection left VTK controls mounted for one frame and crashed.
   const isFuberlin = Boolean(viewportId && getFuberlinVolume3D(viewportId));
+  const [fuberlinMode, setFuberlinMode] = useState<FuberlinMode | undefined>(() =>
+    viewportId && isFuberlin
+      ? (getFuberlinVolume3DRenderMode(viewportId) ?? 'composite')
+      : undefined
+  );
 
   return (
     <AllInOneMenu.ItemPanel>
-      <FuberlinVolumeRenderMode viewportId={viewportId} />
+      <FuberlinVolumeRenderMode
+        viewportId={viewportId}
+        onModeChange={setFuberlinMode}
+      />
       <FuberlinVolumeProjection viewportId={viewportId} />
-      <FuberlinVolumeThreshold viewportId={viewportId} />
+      <FuberlinVolumePresentQuality
+        viewportId={viewportId}
+        renderMode={fuberlinMode}
+      />
+      <FuberlinVolumeThreshold
+        viewportId={viewportId}
+        renderMode={fuberlinMode}
+      />
       {!isFuberlin && (
         <>
           <VolumeRenderingQuality

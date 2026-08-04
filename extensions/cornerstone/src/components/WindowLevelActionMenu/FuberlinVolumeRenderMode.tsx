@@ -16,8 +16,10 @@ const MODES: { value: FuberlinMode; labelKey: string }[] = [
 
 export function FuberlinVolumeRenderMode({
   viewportId,
+  onModeChange: onModeChangeProp,
 }: {
   viewportId?: string;
+  onModeChange?: (mode: FuberlinMode) => void;
 } = {}): ReactElement | null {
   const { t } = useTranslation('WindowLevelActionMenu');
   const { commandsManager } = useSystem();
@@ -40,13 +42,15 @@ export function FuberlinVolumeRenderMode({
       if (!viewportId || !next) {
         return;
       }
-      setMode(next as FuberlinMode);
+      const nextMode = next as FuberlinMode;
+      setMode(nextMode);
       commandsManager.runCommand('setFuberlinVolumeRenderMode', {
         viewportId,
         mode: next,
       });
+      onModeChangeProp?.(nextMode);
     },
-    [commandsManager, viewportId]
+    [commandsManager, viewportId, onModeChangeProp]
   );
 
   if (!isFuberlin || !viewportId) {

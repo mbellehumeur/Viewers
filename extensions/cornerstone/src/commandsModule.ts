@@ -6,9 +6,11 @@ import {
   toggleStatsOverlay,
   setFuberlinVolume3DRenderMode,
   setFuberlinVolume3DProjection,
+  setFuberlinVolume3DPresentQuality,
   setFuberlinVolume3DThreshold,
   isFuberlinVolume3DRenderMode,
   isFuberlinVolume3DProjection,
+  isFuberlinVolume3DPresentQuality,
 } from '@cornerstonejs/core';
 import {
   ToolGroupManager,
@@ -1517,6 +1519,16 @@ function commandsModule({
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
       viewport?.render?.();
     },
+    setFuberlinVolumePresentQuality: ({ viewportId, quality }) => {
+      if (!viewportId || !isFuberlinVolume3DPresentQuality(quality)) {
+        return;
+      }
+      if (!setFuberlinVolume3DPresentQuality(viewportId, quality)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
     resetCrosshairs: ({ viewportId }) => {
       const crosshairInstances = [];
 
@@ -2653,6 +2665,9 @@ function commandsModule({
     },
     setFuberlinVolumeThreshold: {
       commandFn: actions.setFuberlinVolumeThreshold,
+    },
+    setFuberlinVolumePresentQuality: {
+      commandFn: actions.setFuberlinVolumePresentQuality,
     },
     resetCrosshairs: {
       commandFn: actions.resetCrosshairs,

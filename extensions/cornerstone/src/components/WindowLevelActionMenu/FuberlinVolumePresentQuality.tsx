@@ -1,15 +1,17 @@
 import React, { ReactElement, useCallback, useEffect, useState } from 'react';
 import {
   getFuberlinVolume3D,
+  getFuberlinVolume3DPresentQuality,
   getFuberlinVolume3DRenderMode,
-  getFuberlinVolume3DThreshold,
   type FuberlinVolume3DRenderMode as FuberlinMode,
 } from '@cornerstonejs/core';
 import { Numeric } from '@ohif/ui-next';
 import { useSystem } from '@ohif/core';
 import { useTranslation } from 'react-i18next';
 
-export function FuberlinVolumeThreshold({
+const DEFAULT_QUALITY = 1; // OHIF
+
+export function FuberlinVolumePresentQuality({
   viewportId,
   renderMode,
 }: {
@@ -24,21 +26,19 @@ export function FuberlinVolumeThreshold({
     (viewportId && isFuberlin
       ? (getFuberlinVolume3DRenderMode(viewportId) ?? 'composite')
       : undefined);
-  const [threshold, setThreshold] = useState<number | null>(() => {
-    if (!viewportId || !isFuberlin) {
-      return null;
-    }
-    const value = getFuberlinVolume3DThreshold(viewportId);
-    return typeof value === 'number' ? value : 0.36;
-  });
+  const [quality, setQuality] = useState<number>(() =>
+    viewportId && isFuberlin
+      ? (getFuberlinVolume3DPresentQuality(viewportId) ?? DEFAULT_QUALITY)
+      : DEFAULT_QUALITY
+  );
 
   useEffect(() => {
     if (!viewportId || !isFuberlin) {
-      setThreshold(null);
       return;
     }
-    const value = getFuberlinVolume3DThreshold(viewportId);
-    setThreshold(typeof value === 'number' ? value : 0.36);
+    setQuality(
+      getFuberlinVolume3DPresentQuality(viewportId) ?? DEFAULT_QUALITY
+    );
   }, [viewportId, isFuberlin, mode]);
 
   const onChange = useCallback(
@@ -46,22 +46,16 @@ export function FuberlinVolumeThreshold({
       if (!viewportId) {
         return;
       }
-      setThreshold(value);
-      commandsManager.runCommand('setFuberlinVolumeThreshold', {
+      setQuality(value);
+      commandsManager.runCommand('setFuberlinVolumePresentQuality', {
         viewportId,
-        threshold: value,
+        quality: value,
       });
     },
     [commandsManager, viewportId]
   );
 
-  // Threshold is unused in composite raymarch (TF opacity only).
-  if (
-    !isFuberlin ||
-    !viewportId ||
-    threshold === null ||
-    mode === 'composite'
-  ) {
+  if (!isFuberlin || !viewportId || mode !== 'composite') {
     return null;
   }
 
@@ -73,12 +67,16 @@ export function FuberlinVolumeThreshold({
           min={0}
           max={1}
           step={0.01}
-          value={threshold}
+          value={quality}
           onChange={onChange}
         >
           <div className="flex flex-row items-center">
-            <Numeric.Label className="w-16">{t('Threshold')}</Numeric.Label>
+            <Numeric.Label className="w-16">{t('Resolution')}</Numeric.Label>
             <Numeric.SingleRange sliderClassName="mx-2 flex-grow" />
+          </div>
+          <div className="text-muted-foreground mt-1 flex justify-between px-16 text-xs">
+            <span>{t('MView')}</span>
+            <span>{t('OHIF')}</span>
           </div>
         </Numeric.Container>
       </div>
