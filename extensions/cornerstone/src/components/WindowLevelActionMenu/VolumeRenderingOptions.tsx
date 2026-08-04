@@ -6,6 +6,8 @@ import { VolumeShift } from './VolumeShift';
 import { VolumeLighting } from './VolumeLighting';
 import { VolumeShade } from './VolumeShade';
 import { FuberlinVolumeRenderMode } from './FuberlinVolumeRenderMode';
+import { FuberlinVolumeProjection } from './FuberlinVolumeProjection';
+import { FuberlinVolumeThreshold } from './FuberlinVolumeThreshold';
 import { useViewportRendering } from '../../hooks/useViewportRendering';
 import { useTranslation } from 'react-i18next';
 
@@ -19,6 +21,8 @@ export function VolumeRenderingOptions({ viewportId }: { viewportId?: string } =
   return (
     <AllInOneMenu.ItemPanel>
       <FuberlinVolumeRenderMode viewportId={viewportId} />
+      <FuberlinVolumeProjection viewportId={viewportId} />
+      <FuberlinVolumeThreshold viewportId={viewportId} />
       {!isFuberlin && (
         <>
           <VolumeRenderingQuality

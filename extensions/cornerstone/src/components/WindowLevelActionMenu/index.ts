@@ -10,3 +10,5 @@ export * from './VolumeLighting';
 export * from './VolumeShade';
 export * from './VolumeShift';
 export * from './FuberlinVolumeRenderMode';
+export * from './FuberlinVolumeProjection';
+export * from './FuberlinVolumeThreshold';

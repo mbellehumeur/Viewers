@@ -5,7 +5,10 @@ import {
   getRenderingEngines,
   toggleStatsOverlay,
   setFuberlinVolume3DRenderMode,
+  setFuberlinVolume3DProjection,
+  setFuberlinVolume3DThreshold,
   isFuberlinVolume3DRenderMode,
+  isFuberlinVolume3DProjection,
 } from '@cornerstonejs/core';
 import {
   ToolGroupManager,
@@ -1492,6 +1495,28 @@ function commandsModule({
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
       viewport?.render?.();
     },
+    setFuberlinVolumeProjection: ({ viewportId, projection }) => {
+      if (!viewportId || !isFuberlinVolume3DProjection(projection)) {
+        return;
+      }
+      if (!setFuberlinVolume3DProjection(viewportId, projection)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      // Re-sync framing from CS camera when entering orthographic mode.
+      viewport?.setViewState?.(viewport.getViewState?.() ?? {});
+      viewport?.render?.();
+    },
+    setFuberlinVolumeThreshold: ({ viewportId, threshold }) => {
+      if (!viewportId || !Number.isFinite(threshold)) {
+        return;
+      }
+      if (!setFuberlinVolume3DThreshold(viewportId, threshold)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
     resetCrosshairs: ({ viewportId }) => {
       const crosshairInstances = [];
 
@@ -2622,6 +2647,12 @@ function commandsModule({
     },
     setFuberlinVolumeRenderMode: {
       commandFn: actions.setFuberlinVolumeRenderMode,
+    },
+    setFuberlinVolumeProjection: {
+      commandFn: actions.setFuberlinVolumeProjection,
+    },
+    setFuberlinVolumeThreshold: {
+      commandFn: actions.setFuberlinVolumeThreshold,
     },
     resetCrosshairs: {
       commandFn: actions.resetCrosshairs,
