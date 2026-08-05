@@ -1,15 +1,46 @@
 import React, { ReactElement, useCallback, useEffect, useState } from 'react';
 import {
+  FUBERLIN_DEFAULT_PRESENT_QUALITY,
   getFuberlinVolume3D,
   getFuberlinVolume3DPresentQuality,
+  getFuberlinVolume3DPresentQualityProfiles,
   getFuberlinVolume3DRenderMode,
+  type FuberlinVolume3DPresentQualityProfiles,
+  type FuberlinVolume3DQualityProfileSnapshot,
   type FuberlinVolume3DRenderMode as FuberlinMode,
 } from '@cornerstonejs/core';
 import { Numeric } from '@ohif/ui-next';
 import { useSystem } from '@ohif/core';
 import { useTranslation } from 'react-i18next';
 
-const DEFAULT_QUALITY = 1; // OHIF
+function formatPixelBudget(pixels: number): string {
+  if (pixels >= 1_000_000) {
+    return `${(pixels / 1_000_000).toFixed(1)}M`;
+  }
+  if (pixels >= 1_000) {
+    return `${Math.round(pixels / 1_000)}k`;
+  }
+  return `${Math.round(pixels)}`;
+}
+
+function formatProfileLine(
+  label: string,
+  profile: FuberlinVolume3DQualityProfileSnapshot
+): string {
+  const min = profile.minimumScale.toFixed(2);
+  const max = profile.maximumScale.toFixed(2);
+  const scale =
+    Math.abs(profile.minimumScale - profile.maximumScale) < 0.005
+      ? min
+      : `${min}–${max}`;
+  return `${label}: ${formatPixelBudget(profile.pixelBudget)} px · scale ${scale} · ${profile.steps} steps`;
+}
+
+function readProfiles(
+  viewportId: string
+): FuberlinVolume3DPresentQualityProfiles | undefined {
+  return getFuberlinVolume3DPresentQualityProfiles(viewportId);
+}
 
 export function FuberlinVolumePresentQuality({
   viewportId,
@@ -28,17 +59,23 @@ export function FuberlinVolumePresentQuality({
       : undefined);
   const [quality, setQuality] = useState<number>(() =>
     viewportId && isFuberlin
-      ? (getFuberlinVolume3DPresentQuality(viewportId) ?? DEFAULT_QUALITY)
-      : DEFAULT_QUALITY
+      ? (getFuberlinVolume3DPresentQuality(viewportId) ??
+        FUBERLIN_DEFAULT_PRESENT_QUALITY)
+      : FUBERLIN_DEFAULT_PRESENT_QUALITY
   );
+  const [profiles, setProfiles] = useState<
+    FuberlinVolume3DPresentQualityProfiles | undefined
+  >(() => (viewportId && isFuberlin ? readProfiles(viewportId) : undefined));
 
   useEffect(() => {
     if (!viewportId || !isFuberlin) {
       return;
     }
     setQuality(
-      getFuberlinVolume3DPresentQuality(viewportId) ?? DEFAULT_QUALITY
+      getFuberlinVolume3DPresentQuality(viewportId) ??
+        FUBERLIN_DEFAULT_PRESENT_QUALITY
     );
+    setProfiles(readProfiles(viewportId));
   }, [viewportId, isFuberlin, mode]);
 
   const onChange = useCallback(
@@ -51,6 +88,7 @@ export function FuberlinVolumePresentQuality({
         viewportId,
         quality: value,
       });
+      setProfiles(readProfiles(viewportId));
     },
     [commandsManager, viewportId]
   );
@@ -74,9 +112,14 @@ export function FuberlinVolumePresentQuality({
             <Numeric.Label className="w-16">{t('Resolution')}</Numeric.Label>
             <Numeric.SingleRange sliderClassName="mx-2 flex-grow" />
           </div>
-          <div className="text-muted-foreground mt-1 flex justify-between px-16 text-xs">
-            <span>{t('MView')}</span>
-            <span>{t('OHIF')}</span>
+          <div className="text-muted-foreground mt-1 space-y-0.5 px-2 text-xs">
+            <div>{quality.toFixed(2)}</div>
+            {profiles && (
+              <>
+                <div>{formatProfileLine('still', profiles.still)}</div>
+                <div>{formatProfileLine('drag', profiles.interactive)}</div>
+              </>
+            )}
           </div>
         </Numeric.Container>
       </div>
