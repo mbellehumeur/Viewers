@@ -29,7 +29,7 @@ export function FuberlinVolumeThreshold({
       return null;
     }
     const value = getFuberlinVolume3DThreshold(viewportId);
-    return typeof value === 'number' ? value : 0.36;
+    return typeof value === 'number' ? value : 0.35;
   });
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export function FuberlinVolumeThreshold({
       return;
     }
     const value = getFuberlinVolume3DThreshold(viewportId);
-    setThreshold(typeof value === 'number' ? value : 0.36);
+    setThreshold(typeof value === 'number' ? value : 0.35);
   }, [viewportId, isFuberlin, mode]);
 
   const onChange = useCallback(
@@ -79,6 +79,9 @@ export function FuberlinVolumeThreshold({
           <div className="flex flex-row items-center">
             <Numeric.Label className="w-16">{t('Threshold')}</Numeric.Label>
             <Numeric.SingleRange sliderClassName="mx-2 flex-grow" />
+            <div className="w-10 text-right tabular-nums">
+              {Math.round(threshold * 100)}%
+            </div>
           </div>
         </Numeric.Container>
       </div>
