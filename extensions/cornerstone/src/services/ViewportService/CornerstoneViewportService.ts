@@ -48,6 +48,7 @@ import type { IViewportBackend } from './backends/IViewportBackend';
 import type { IViewportServiceInternals } from './backends/IViewportServiceInternals';
 import { LegacyViewportBackend } from './backends/LegacyViewportBackend';
 import { NextViewportBackend } from './backends/NextViewportBackend';
+import { applySlicerLiveSegmentationFromOHIF } from '../../utils/slicerLiveSegBridge';
 
 const EVENTS = {
   VIEWPORT_DATA_CHANGED: 'event::cornerstoneViewportService:viewportDataChanged',
@@ -1345,7 +1346,7 @@ class CornerstoneViewportService
         ? csToolsEnums.SegmentationRepresentations.Labelmap
         : csToolsEnums.SegmentationRepresentations.Contour;
 
-    const applyRepresentation = () => {
+    const applyRepresentation = async () => {
       const { predecessorImageId } = displaySet;
       const segmentationRepresentationPromise =
         segmentationService.addSegmentationRepresentation(viewport.id, {
@@ -1360,7 +1361,23 @@ class CornerstoneViewportService
           },
         });
       this.storePresentation({ viewportId: viewport.id });
-      return segmentationRepresentationPromise;
+      await segmentationRepresentationPromise;
+
+      // SlicerLive Volume3D: paint SEG as SDF SegmentField (VTK actors are not visible).
+      if (displaySet.Modality === 'SEG') {
+        try {
+          await applySlicerLiveSegmentationFromOHIF(
+            viewport.id,
+            segmentationId,
+            segmentationService
+          );
+        } catch (error) {
+          console.warn(
+            `[CornerstoneViewportService] Failed to load SEG into SlicerLive for "${segmentationId}":`,
+            error
+          );
+        }
+      }
     };
 
     // SEG overlay is registered during stack setup, but cornerstone segmentation state

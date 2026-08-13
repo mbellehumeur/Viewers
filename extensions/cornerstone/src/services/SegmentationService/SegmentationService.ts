@@ -38,6 +38,7 @@ import {
 // cannot use a per-viewport capability check and reads the session flag instead.
 import { isNextViewportsEnabled } from '../../utils/nextViewports';
 import { isNextViewport } from '../ViewportService/adapter';
+import { clearSlicerLiveSegmentationForViewport } from '../../utils/slicerLiveSegBridge';
 
 const { DefaultHistoryMemo } = csUtils.HistoryMemo;
 
@@ -1418,6 +1419,8 @@ class SegmentationService extends PubSubService implements ISegmentationServiceI
     } = {}
   ): void {
     cstSegmentation.removeSegmentationRepresentations(viewportId, specifier);
+    // SlicerLive Volume3D composites SEG via SDF SegmentField — clear when OHIF removes overlay.
+    void clearSlicerLiveSegmentationForViewport(viewportId);
   }
 
   /**

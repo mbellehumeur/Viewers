@@ -2,7 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useViewportGrid } from '@ohif/ui-next';
 import createSEGToolGroupAndAddTools from '../utils/initSEGToolGroup';
 import promptHydrateSEG from '../utils/promptHydrateSEG';
-import { usePositionPresentationStore, OHIFCornerstoneViewport } from '@ohif/extension-cornerstone';
+import {
+  usePositionPresentationStore,
+  OHIFCornerstoneViewport,
+  shouldUseSlicerLiveSegHydration,
+} from '@ohif/extension-cornerstone';
 import { SegmentationRepresentations } from '@cornerstonejs/tools/enums';
 import { useSystem } from '@ohif/core/src/contextProviders/SystemProvider';
 
@@ -50,8 +54,14 @@ function OHIFCornerstoneSEGViewport(props: withAppTypes) {
 
   // refs
   const referencedDisplaySetRef = useRef(null);
+  // When hydrating away from this SEG viewport, skip clearSegmentationRepresentations
+  // on unmount — that clear was wiping CT+SEG right after a successful hydrate.
+  const hydratingAwayRef = useRef(false);
+  const slicerLiveBounceStartedRef = useRef(false);
 
   const { viewports, activeViewportId } = viewportGrid;
+
+  const isSlicerLiveTarget = shouldUseSlicerLiveSegHydration(viewportId, servicesManager);
 
   const referencedDisplaySetInstanceUID = segDisplaySet.referencedDisplaySetInstanceUID;
   // If the referencedDisplaySetInstanceUID is not found, it means the SEG series is being
@@ -123,7 +133,48 @@ function OHIFCornerstoneSEGViewport(props: withAppTypes) {
     viewportOptions,
   ]);
 
+  // SlicerLive Volume3D: bounce straight back to the referenced CT (Volume3D) and
+  // hydrate SEG in the background — no "Loading SEG..." overlay, no confirm dialog.
   useEffect(() => {
+    if (!isSlicerLiveTarget || slicerLiveBounceStartedRef.current) {
+      return;
+    }
+    slicerLiveBounceStartedRef.current = true;
+    hydratingAwayRef.current = true;
+
+    void (async () => {
+      const refUID = segDisplaySet.referencedDisplaySetInstanceUID;
+      if (!refUID) {
+        return;
+      }
+
+      await commandsManager.runCommand('setDisplaySetsForViewports', {
+        viewportsToUpdate: [
+          {
+            viewportId,
+            displaySetInstanceUIDs: [refUID],
+            viewportOptions: {
+              ...viewportOptions,
+              viewportType: 'volume3d',
+            },
+          },
+        ],
+      });
+
+      await commandsManager.runCommand('hydrateSlicerLiveSegmentationOverlay', {
+        viewportId,
+        displaySetInstanceUID: segDisplaySet.displaySetInstanceUID,
+        waitForRemount: true,
+      });
+    })();
+  }, [isSlicerLiveTarget, commandsManager, viewportId, segDisplaySet, viewportOptions]);
+
+  useEffect(() => {
+    if (isSlicerLiveTarget) {
+      // SlicerLive path hydrates without the confirm dialog.
+      return;
+    }
+
     if (segIsLoading) {
       return;
     }
@@ -138,6 +189,7 @@ function OHIFCornerstoneSEGViewport(props: withAppTypes) {
       viewportId,
       segDisplaySet,
       hydrateCallback: async () => {
+        hydratingAwayRef.current = true;
         await commandsManager.runCommand('hydrateSecondaryDisplaySet', {
           displaySet: segDisplaySet,
           viewportId,
@@ -146,11 +198,21 @@ function OHIFCornerstoneSEGViewport(props: withAppTypes) {
         return true;
       },
     });
-  }, [servicesManager, viewportId, segDisplaySet, segIsLoading, commandsManager, activeViewportId]);
+  }, [
+    servicesManager,
+    viewportId,
+    segDisplaySet,
+    segIsLoading,
+    commandsManager,
+    activeViewportId,
+    isSlicerLiveTarget,
+  ]);
 
   useEffect(() => {
     // on new seg display set, remove all segmentations from all viewports
-    segmentationService.clearSegmentationRepresentations(viewportId);
+    if (!isSlicerLiveTarget) {
+      segmentationService.clearSegmentationRepresentations(viewportId);
+    }
 
     const { unsubscribe } = segmentationService.subscribe(
       segmentationService.EVENTS.SEGMENTATION_LOADING_COMPLETE,
@@ -175,7 +237,7 @@ function OHIFCornerstoneSEGViewport(props: withAppTypes) {
     return () => {
       unsubscribe();
     };
-  }, [segDisplaySet]);
+  }, [segDisplaySet, isSlicerLiveTarget]);
 
   useEffect(() => {
     const { unsubscribe } = segmentationService.subscribe(
@@ -231,7 +293,9 @@ function OHIFCornerstoneSEGViewport(props: withAppTypes) {
 
     // always start fresh for this viewport since it is special type of viewport
     // that should only show one segmentation at a time.
-    segmentationService.clearSegmentationRepresentations(viewportId);
+    if (!isSlicerLiveTarget) {
+      segmentationService.clearSegmentationRepresentations(viewportId);
+    }
 
     // This creates a custom tool group which has the lifetime of this view
     // only, and does NOT interfere with currently displayed segmentations.
@@ -245,7 +309,9 @@ function OHIFCornerstoneSEGViewport(props: withAppTypes) {
     return () => {
       // remove the segmentation representations if seg displayset changed
       // e.g., another seg displayset is dragged into the viewport
-      segmentationService.clearSegmentationRepresentations(viewportId);
+      if (!hydratingAwayRef.current) {
+        segmentationService.clearSegmentationRepresentations(viewportId);
+      }
 
       // Only destroy the viewport specific implementation
       toolGroupService.destroyToolGroup(toolGroupId);
@@ -273,6 +339,12 @@ function OHIFCornerstoneSEGViewport(props: withAppTypes) {
         })
       );
     });
+  }
+
+  // SlicerLive bounce-back: render nothing (avoid "Loading SEG..." blanking the pane
+  // while CT Volume3D is restored).
+  if (isSlicerLiveTarget) {
+    return null;
   }
 
   return (

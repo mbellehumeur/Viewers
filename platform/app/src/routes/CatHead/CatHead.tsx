@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useSystem } from '@ohif/core';
+import { useAppConfig } from '@state';
 
 import filesToStudies from '../Local/filesToStudies';
 import { publicUrl } from '../../utils/publicUrl';
+import useSearchParams from '../../hooks/useSearchParams';
+import ModeRoute from '../Mode/Mode';
 
-type LoadState = 'loading' | 'error';
+type LoadState = 'loading' | 'ready' | 'error';
 
 function joinPublicPath(...parts: string[]): string {
   const base = publicUrl.endsWith('/') ? publicUrl.slice(0, -1) : publicUrl;
@@ -16,6 +19,24 @@ function joinPublicPath(...parts: string[]): string {
   return `${base}/${path}`;
 }
 
+function buildViewerQuery(studyUIDs: string[], existingSearch: string): URLSearchParams {
+  const existing = new URLSearchParams(existingSearch);
+  const query = new URLSearchParams();
+
+  studyUIDs.forEach(id => query.append('StudyInstanceUIDs', id));
+  query.set('datasources', 'dicomlocal');
+  query.set('hangingProtocolId', 'only3D');
+
+  for (const [key, value] of existing) {
+    if (key === 'StudyInstanceUIDs' || key === 'datasources' || key === 'hangingProtocolId') {
+      continue;
+    }
+    query.append(key, value);
+  }
+
+  return query;
+}
+
 /**
  * Fixed demo page that auto-loads bundled Cat Head DICOM files via the
  * dicomlocal pipeline (same File → filesToStudies path as drag-and-drop).
@@ -23,13 +44,23 @@ function joinPublicPath(...parts: string[]): string {
  * Expects assets under `public/cat-head/`:
  * - `manifest.json`: string[] of filenames (relative to that folder)
  * - the listed `.dcm` (or extensionless) instance files
+ *
+ * After load, stays on `/cathead?…` so refresh re-fetches and re-indexes the
+ * bundled files before opening the viewer.
  */
 function CatHead() {
   const navigate = useNavigate();
-  const { servicesManager } = useSystem();
+  const location = useLocation();
+  const query = useSearchParams();
+  const [appConfig] = useAppConfig();
+  const { extensionManager, servicesManager, commandsManager, hotkeysManager } = useSystem();
   const { customizationService } = servicesManager.services;
   const [state, setState] = useState<LoadState>('loading');
   const [message, setMessage] = useState('Loading Cat Head DICOM files…');
+
+  const studyUIDsInUrl = query.getAll('StudyInstanceUIDs');
+  const hasViewerQuery = studyUIDsInUrl.length > 0;
+  const viewerMode = appConfig?.loadedModes?.find(mode => mode.routeName === 'viewer');
 
   const LoadingIndicatorProgress = customizationService.getCustomization(
     'ui.loadingIndicatorProgress'
@@ -47,6 +78,9 @@ function CatHead() {
 
     async function loadCatHead() {
       try {
+        setState('loading');
+        setMessage('Loading Cat Head DICOM files…');
+
         const manifestUrl = joinPublicPath('cat-head', 'manifest.json');
         const manifestResponse = await fetch(manifestUrl);
 
@@ -102,12 +136,15 @@ function CatHead() {
           );
         }
 
-        const query = new URLSearchParams();
-        studyUIDs.forEach(id => query.append('StudyInstanceUIDs', id));
-        query.append('datasources', 'dicomlocal');
-        query.append('hangingProtocolId', 'only3D');
+        const alreadyHasViewerQuery =
+          new URLSearchParams(location.search).getAll('StudyInstanceUIDs').length > 0;
 
-        navigate(`/viewer/dicomlocal?${query.toString()}`, { replace: true });
+        if (!alreadyHasViewerQuery) {
+          const viewerQuery = buildViewerQuery(studyUIDs, location.search);
+          navigate(`/cathead?${viewerQuery.toString()}`, { replace: true });
+        }
+
+        setState('ready');
       } catch (error) {
         if (cancelled) {
           return;
@@ -125,6 +162,33 @@ function CatHead() {
       cancelled = true;
     };
   }, [navigate]);
+
+  if (state === 'ready' && hasViewerQuery && viewerMode) {
+    return (
+      <ModeRoute
+        mode={viewerMode}
+        dataSourceName="dicomlocal"
+        extensionManager={extensionManager}
+        servicesManager={servicesManager}
+        commandsManager={commandsManager}
+        hotkeysManager={hotkeysManager}
+      />
+    );
+  }
+
+  if (state === 'ready' && hasViewerQuery && !viewerMode) {
+    return (
+      <div className="text-foreground flex h-screen w-screen items-center justify-center">
+        <div className="bg-muted border-primary/60 mx-auto max-w-xl space-y-4 rounded-xl border border-dashed px-10 py-12 text-center drop-shadow-md">
+          <h1 className="text-primary text-2xl">Cat Head</h1>
+          <p className="text-destructive text-sm">
+            Viewer mode is not available. Check that the longitudinal viewer mode is
+            registered in app config.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="text-foreground flex h-screen w-screen items-center justify-center">

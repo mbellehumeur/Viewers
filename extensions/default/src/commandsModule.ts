@@ -1,4 +1,5 @@
 import { Types, DicomMetadataStore, utils } from '@ohif/core';
+import { getSlicerLiveVolume3D } from '@cornerstonejs/core';
 import { datasetToDicomBlob, setNonEnumerableInstanceProperty } from './utils/dicomWriter';
 import { registerNaturalizedDatasetsForLocalWadouri } from './utils/registerNaturalizedDatasetForLocalWadouri';
 
@@ -86,6 +87,14 @@ const commandsModule = ({
       const displaySet = displaySetService.getDisplaySetByUID(displaySetInstanceUID);
       if (!displaySet) {
         return;
+      }
+
+      // SlicerLive Volume3D + SEG: hydrate without remounting (keeps CT VR up).
+      if (displaySet.Modality === 'SEG' && getSlicerLiveVolume3D(viewportId)) {
+        return commandsManager.runCommand('hydrateSlicerLiveSegmentationOverlay', {
+          viewportId,
+          displaySetInstanceUID,
+        });
       }
 
       // Get current display sets for the viewport

@@ -50,6 +50,7 @@ import {
   getHydrationViewportTypeForModality,
 } from './utils/nextViewportPolicies';
 import { findNearbyToolData } from './utils/findNearbyToolData';
+import { shouldUseSlicerLiveSegHydration } from './utils/hydrateSlicerLiveSegOverlay';
 import { createFrameViewSynchronizer } from './synchronizers/frameViewSynchronizer';
 import { getSopClassHandlerModule } from './getSopClassHandlerModule';
 import { getDynamicVolumeInfo } from '@cornerstonejs/core/utilities';
@@ -308,6 +309,7 @@ export {
   NEXT_FUSION_PT_OPACITY,
   NEXT_OVERLAY_OPACITY,
   getHydrationViewportTypeForModality,
+  shouldUseSlicerLiveSegHydration,
   dicomLoaderService,
   // Export all stores
   useLutPresentationStore,

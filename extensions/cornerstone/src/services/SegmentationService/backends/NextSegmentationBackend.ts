@@ -4,6 +4,7 @@ import {
   segmentation as cstSegmentation,
   type Types as cstTypes,
 } from '@cornerstonejs/tools';
+import { isVolume3DViewportType } from '../../../utils/getLegacyViewportType';
 import type {
   AssembleSegmentationForSEGParams,
   ISegmentationBackend,
@@ -35,12 +36,19 @@ const {
  */
 export class NextSegmentationBackend implements ISegmentationBackend {
   async classifyAndPrepareLabelmapAdd(
-    _csViewport: csTypes.IViewport,
+    csViewport: csTypes.IViewport,
     _segmentation: cstTypes.Segmentation,
     viewportId: string,
     segmentationId: string,
     representationType: csToolsEnums.SegmentationRepresentations
   ): Promise<LabelmapAddClassification> {
+    // Volume3D (incl. SlicerLive) has no getCurrentImageId — stack image-reference
+    // mapping does not apply. Keep the requested Labelmap type so hydrated SEG
+    // scalars remain available (e.g. SlicerLive SDF bridge).
+    if (isVolume3DViewportType(csViewport)) {
+      return { representationTypeToUse: representationType, isConverted: false };
+    }
+
     // Try the duck-typed in-place resolver so the labelmap's images map onto the
     // viewport's current image when the FrameOfReference matches. Its return value
     // is intentionally ignored: we return isConverted:false UNCONDITIONALLY so we

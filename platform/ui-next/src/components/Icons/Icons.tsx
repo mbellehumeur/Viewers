@@ -93,6 +93,7 @@ import LayerSegmentation from './Sources/LayerSegmentation';
 import WindowLevelAdvanced from './Sources/WindowLevelAdvanced';
 import Opacity from './Sources/Opacity';
 import Threshold from './Sources/Threshold';
+import ToolCrop from './Sources/ToolCrop';
 import {
   Tool3DRotate,
   ToolAngle,
@@ -464,6 +465,7 @@ export const Icons = {
   ToolMove,
   ToolPolygon,
   ToolQuickMagnify,
+  ToolCrop,
   ToolRectangle,
   ToolReferenceLines,
   ToolReset,
@@ -745,6 +747,7 @@ export const Icons = {
   'tool-polygon': (props: IconProps) => ToolPolygon(props),
   'tool-ellipse': (props: IconProps) => ToolMeasureEllipse(props),
   'tool-quick-magnify': (props: IconProps) => ToolQuickMagnify(props),
+  'tool-crop': (props: IconProps) => ToolCrop(props),
   'tool-rectangle': (props: IconProps) => ToolRectangle(props),
   'tool-referenceLines': (props: IconProps) => ToolReferenceLines(props),
   'tool-reset': (props: IconProps) => ToolReset(props),

@@ -90,6 +90,10 @@ import {
   attachSlicerLiveCropBridge,
   detachSlicerLiveCropBridge,
 } from './utils/slicerLiveCropBridge';
+import {
+  hydrateSlicerLiveSegmentationOverlay,
+  shouldUseSlicerLiveSegHydration,
+} from './utils/hydrateSlicerLiveSegOverlay';
 import { utilities as segmentationUtilities } from '@cornerstonejs/tools/segmentation';
 import i18n from '@ohif/i18n';
 
@@ -399,6 +403,28 @@ function commandsModule({
           referencedDisplaySetInstanceUID
         );
         storePositionPresentation(referencedDisplaySet);
+
+        // SlicerLive Volume3D: restore CT VR and hydrate SEG without the SEG-viewport path.
+        if (
+          displaySet.Modality === 'SEG' &&
+          shouldUseSlicerLiveSegHydration(viewportId, servicesManager)
+        ) {
+          await actions.setDisplaySetsForViewports({
+            viewportsToUpdate: [
+              {
+                viewportId,
+                displaySetInstanceUIDs: [referencedDisplaySet.displaySetInstanceUID],
+                viewportOptions: { viewportType: 'volume3d' },
+              },
+            ],
+          });
+          return hydrateSlicerLiveSegmentationOverlay({
+            viewportId,
+            displaySetInstanceUID: displaySet.displaySetInstanceUID,
+            servicesManager,
+            waitForRemount: true,
+          });
+        }
 
         const results = commandsManager.runCommand('loadSegmentationDisplaySetsForViewport', {
           viewportId,
@@ -1733,6 +1759,26 @@ function commandsModule({
       const enabled = !(getSlicerLiveVolume3DCropEnabled(id) ?? false);
       actions.setSlicerLiveVolumeCropEnabled({ viewportId: id, enabled });
     },
+    /**
+     * Add a SEG overlay to a SlicerLive Volume3D viewport without remounting
+     * (CT VR stays visible while SEG decode / SDF bake runs).
+     */
+    hydrateSlicerLiveSegmentationOverlay: async ({
+      viewportId,
+      displaySetInstanceUID,
+      waitForRemount = false,
+    }) => {
+      const id = viewportId || viewportGridService.getActiveViewportId();
+      if (!id || !displaySetInstanceUID || !shouldUseSlicerLiveSegHydration(id, servicesManager)) {
+        return false;
+      }
+      return hydrateSlicerLiveSegmentationOverlay({
+        viewportId: id,
+        displaySetInstanceUID,
+        servicesManager,
+        waitForRemount,
+      });
+    },
     resetCrosshairs: ({ viewportId }) => {
       const crosshairInstances = [];
 
@@ -2920,6 +2966,9 @@ function commandsModule({
     },
     toggleSlicerLiveVolumeCrop: {
       commandFn: actions.toggleSlicerLiveVolumeCrop,
+    },
+    hydrateSlicerLiveSegmentationOverlay: {
+      commandFn: actions.hydrateSlicerLiveSegmentationOverlay,
     },
     resetCrosshairs: {
       commandFn: actions.resetCrosshairs,

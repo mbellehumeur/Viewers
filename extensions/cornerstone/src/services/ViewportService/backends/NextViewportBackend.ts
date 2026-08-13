@@ -8,6 +8,7 @@ import {
   applyFuberlinVolume3DPreset,
   applyMviewVolume3DPreset,
   applySlicerLiveVolume3DPreset,
+  SLICERLIVE_VOLUME_3D_RENDER_MODE,
 } from '@cornerstonejs/core';
 import type { RenderBackendValue } from '@cornerstonejs/core';
 import { utilities as csToolsUtils } from '@cornerstonejs/tools';
@@ -16,6 +17,7 @@ import {
   getViewportRenderingOverride,
   getVolume3DRenderModeOverride,
 } from '../../../utils/nextViewports';
+import { markSlicerLiveVolumeViewport } from '../../../utils/hydrateSlicerLiveSegOverlay';
 import type ViewportInfo from '../Viewport';
 import type {
   Presentations,
@@ -477,6 +479,10 @@ export class NextViewportBackend implements IViewportBackend {
     const volume3DRenderMode =
       renderModeOverride ??
       (volumeRenderBackend === 'webgpu' ? 'webgpuVolume3d' : 'vtkVolume3d');
+
+    if (is3D && volume3DRenderMode === SLICERLIVE_VOLUME_3D_RENDER_MODE) {
+      markSlicerLiveVolumeViewport(viewport.id, true);
+    }
 
     // First pass: register each dataId and build the COMPLETE entry set. The native
     // PlanarViewport.setDisplaySets has replace semantics (removeReplaceableData), so

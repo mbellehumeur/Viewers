@@ -1,65 +1,91 @@
 /** @type {AppTypes.Config} */
 
-// Secure, minimal default configuration.
+// WebGPU + native GenericViewport configuration for local dev and cloud deploys.
 //
-// This is what a plain production build with no APP_CONFIG produces, so it is
-// deliberately locked down:
-//   - The local file data source (`dicomlocal`) and the runtime `?url=` sources
-//     (`dicomjson`, `dicomwebproxy`) are NOT enabled — they widen the attack
-//     surface of a default deployment.
-//   - `?customization=` URL loading is OFF: no `customizationUrlPrefixes` are
-//     configured, so any `?customization=` value is rejected (and aborts boot
-//     rather than silently loading).
-//   - `dangerouslyUseDynamicConfig` (the `configUrl` query parameter) is off.
+// Build:  APP_CONFIG=config/webgpu.js yarn run build
+// Dev:    APP_CONFIG=config/webgpu.js yarn run dev
 //
-// It does not need to "just work" untouched — point the data source below at
-// your own DICOMweb server. For a fully-featured setup with every data source
-// and customization loading enabled, see config/dev.js (local development) and
-// config/netlify.js (the public demo deploy).
+// Enables next viewports and WebGPU render backend by default.
+// Stats overlay: off by default — press ctrl+shift+d to toggle (or ?debug=true).
 window.config = {
-  name: 'config/default.js',
+  name: 'config/webgpu.js',
   routerBasename: null,
-  // whiteLabeling: {},
   extensions: [],
   modes: [],
-  customizationService: {},
+  customizationService: [
+    '@ohif/extension-default.customizationModule.theme',
+    {
+      // Top-right badge: live OHIFCornerstoneRenderingEngine viewport `.type`
+      // (volume3d vs volume3d next). Shown when only3D (or any volume3d pane)
+      // has hideOverlays disabled.
+      'viewportOverlay.topRight': {
+        $push: [
+          {
+            id: 'ViewportType',
+            inheritsFrom: 'ohif.overlayItem',
+            title: 'OHIFCornerstoneRenderingEngine viewport type',
+            contentF: ({ viewportId, servicesManager, activeRenderMode }) => {
+              const viewport = servicesManager?.services?.cornerstoneViewportService
+                ?.getRenderingEngine()
+                ?.getViewport(viewportId);
+              const type = viewport?.type;
+              const renderMode =
+                activeRenderMode ??
+                (typeof viewport?.getActiveRenderMode === 'function'
+                  ? viewport.getActiveRenderMode()
+                  : undefined);
 
-  // --- URL-driven customizations (?customization=) ----------------------------
-  // OFF by default. To allow loading customization data files from the URL, set
-  // `customizationUrlPrefixes` to a map of allowed prefixes. The `default` prefix
-  // (no slashes) is used for values with no leading slash; every other prefix
-  // must start AND end with a slash and is matched against the leading
-  // `/segment/` of the value. Files are fetched and parsed as JSONC data — they
-  // are never executed. Example (left disabled here on purpose):
-  //
-  // customizationUrlPrefixes: {
-  //   default: './customizations/',                       // ?customization=tools/ctPresets
-  //   '/remote/': 'https://cdn.example.com/ohif-custom/', // ?customization=/remote/siteA
-  // },
-  // ----------------------------------------------------------------------------
+              let label = null;
+              if (type === 'volume3dNext') {
+                label = 'volume3d next';
+              } else if (type === 'volume3d') {
+                label = 'volume3d';
+              }
 
-  // --- Native ("next") Generic Viewport --------------------------------------
-  // OFF by default. Set `enabled: true` (or pass ?useNextViewports=true in the
-  // URL) to drive viewports through cornerstone's native GenericViewport
-  // ("next") API instead of the legacy Stack/Volume viewport classes.
-  genericViewports: {
-    enabled: false,
-    // Render backend selection: 'cpu' | 'webgl' | 'auto' | a backend id
-    // registered via cornerstone's registerRenderBackend (e.g. a webgpu
-    // backend), or a map with per-viewport-type overrides, e.g.
-    // { default: 'webgl', orthographic: 'cpu' }. The matching URL params take
-    // precedence per-session: ?viewportRendering=cpu and
-    // ?orthographic.viewportRendering=cpu.
-    // viewportRendering: 'auto',
+              if (!label) {
+                return null;
+              }
+
+              if (renderMode === 'mviewVolume3d') {
+                return `${label} · mview`;
+              }
+              if (renderMode === 'slicerLiveVolume3d') {
+                return `${label} · slicerlive`;
+              }
+              if (renderMode === 'fuberlinVolume3D') {
+                return `${label} · fuberlin`;
+              }
+              if (renderMode === 'webgpuVolume3d') {
+                return `${label} · webgpu`;
+              }
+              if (renderMode === 'vtkVolume3d') {
+                return `${label} · vtk`;
+              }
+              return label;
+            },
+          },
+        ],
+      },
+    },
+  ],
+
+  customizationUrlPrefixes: {
+    default: './customizations/',
   },
-  // ----------------------------------------------------------------------------
+
+  // Native GenericViewport ("next") + WebGPU render backend.
+  genericViewports: {
+    enabled: true,
+  },
+
   showStudyList: true,
-  // some windows systems have issues with more than 3 web workers
   maxNumberOfWebWorkers: 3,
-  // below flag is for performance reasons, but it might not work for all servers
   showWarningMessageForCrossOrigin: true,
   showCPUFallbackMessage: true,
   showLoadingIndicator: true,
+  investigationalUseDialog: {
+    option: 'never',
+  },
   experimentalStudyBrowserSort: false,
   strictZSpacingForVolumeViewport: true,
   groupEnabledModesFirst: true,
@@ -67,18 +93,72 @@ window.config = {
   maxNumRequests: {
     interaction: 100,
     thumbnail: 5,
-    // Prefetch number is dependent on the http protocol. For http 2 or
-    // above, the number of requests can be go a lot higher.
     prefetch: 25,
   },
-  showErrorDetails: 'always', // 'always', 'dev', 'production'
-  // `dangerouslyUseDynamicConfig` (load configuration from a `configUrl` query
-  // parameter) is intentionally left OFF in the secure default build. See
-  // config/dev.js for the documented shape.
+  showErrorDetails: 'always',
+  multimonitor: [
+    {
+      id: 'split',
+      test: ({ multimonitor }) => multimonitor === 'split',
+      screens: [
+        {
+          id: 'ohif0',
+          screen: null,
+          location: {
+            screen: 0,
+            width: 0.5,
+            height: 1,
+            left: 0,
+            top: 0,
+          },
+          options: 'location=no,menubar=no,scrollbars=no,status=no,titlebar=no',
+        },
+        {
+          id: 'ohif1',
+          screen: null,
+          location: {
+            width: 0.5,
+            height: 1,
+            left: 0.5,
+            top: 0,
+          },
+          options: 'location=no,menubar=no,scrollbars=no,status=no,titlebar=no',
+        },
+      ],
+    },
+
+    {
+      id: '2',
+      test: ({ multimonitor }) => multimonitor === '2',
+      screens: [
+        {
+          id: 'ohif0',
+          screen: 0,
+          location: {
+            width: 1,
+            height: 1,
+            left: 0,
+            top: 0,
+          },
+          options: 'fullscreen=yes,location=no,menubar=no,scrollbars=no,status=no,titlebar=no',
+        },
+        {
+          id: 'ohif1',
+          screen: 1,
+          location: {
+            width: 1,
+            height: 1,
+            left: 0,
+            top: 0,
+          },
+          options: 'fullscreen=yes,location=no,menubar=no,scrollbars=no,status=no,titlebar=no',
+        },
+      ],
+    },
+  ],
   defaultDataSourceName: 'ohif',
   dataSources: [
     {
-      // Read-only public demo server. Replace with your own DICOMweb server.
       namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
       sourceName: 'ohif',
       configuration: {
@@ -95,11 +175,6 @@ window.config = {
         supportsFuzzyMatching: true,
         supportsWildcard: true,
         staticWado: true,
-        // Multiframe SEG loads fetch the whole instance as a single Part 10
-        // object by default and wait for it: the per-frame endpoint is
-        // efficient, but SEG frames are so small and numerous that one bulk
-        // fetch beats hundreds of tiny requests. Per-frame loading is the
-        // exception — set loadMultiframeAsPart10: false here to force it.
         singlepart: 'bulkdata,video',
         bulkDataURI: {
           enabled: true,
@@ -110,19 +185,131 @@ window.config = {
       },
     },
 
-    // The following data sources are intentionally NOT enabled in the secure
-    // default because they broaden the attack surface of a default deployment.
-    // Enable them only in a deployment you control (see config/dev.js):
-    //   - dicomlocal:    loads DICOM files from the user's machine.
-    //   - dicomjson:     loads metadata from an arbitrary `?url=` (gate with
-    //                    `dangerouslyAllowedOriginsForAuthenticatedEnvironments`).
-    //   - dicomwebproxy: delegating proxy driven by `?url=`.
+    {
+      namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
+      sourceName: 'ohif2',
+      configuration: {
+        friendlyName: 'AWS S3 Static wado secondary server',
+        name: 'aws',
+        wadoUriRoot: 'https://dd14fa38qiwhyfd.cloudfront.net/dicomweb',
+        qidoRoot: 'https://dd14fa38qiwhyfd.cloudfront.net/dicomweb',
+        wadoRoot: 'https://dd14fa38qiwhyfd.cloudfront.net/dicomweb',
+        qidoSupportsIncludeField: false,
+        supportsReject: false,
+        imageRendering: 'wadors',
+        thumbnailRendering: 'wadors',
+        enableStudyLazyLoad: true,
+        supportsFuzzyMatching: false,
+        supportsWildcard: true,
+        staticWado: true,
+        singlepart: 'bulkdata,video',
+        bulkDataURI: {
+          enabled: true,
+          relativeResolution: 'studies',
+        },
+        omitQuotationForMultipartRequest: true,
+      },
+    },
+    {
+      namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
+      sourceName: 'ohif3',
+      configuration: {
+        friendlyName: 'AWS S3 Static wado secondary server',
+        name: 'aws',
+        wadoUriRoot: 'https://d3t6nz73ql33tx.cloudfront.net/dicomweb',
+        qidoRoot: 'https://d3t6nz73ql33tx.cloudfront.net/dicomweb',
+        wadoRoot: 'https://d3t6nz73ql33tx.cloudfront.net/dicomweb',
+        qidoSupportsIncludeField: false,
+        supportsReject: false,
+        imageRendering: 'wadors',
+        thumbnailRendering: 'wadors',
+        enableStudyLazyLoad: true,
+        supportsFuzzyMatching: false,
+        supportsWildcard: true,
+        staticWado: true,
+        singlepart: 'bulkdata,video',
+        bulkDataURI: {
+          enabled: true,
+          relativeResolution: 'studies',
+        },
+        omitQuotationForMultipartRequest: true,
+      },
+    },
+
+    {
+      namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
+      sourceName: 'local5000',
+      configuration: {
+        friendlyName: 'Static WADO Local Data',
+        name: 'DCM4CHEE',
+        qidoRoot: 'http://localhost:5000/dicomweb',
+        wadoRoot: 'http://localhost:5000/dicomweb',
+        qidoSupportsIncludeField: false,
+        supportsReject: true,
+        supportsStow: true,
+        imageRendering: 'wadors',
+        thumbnailRendering: 'wadors',
+        enableStudyLazyLoad: true,
+        supportsFuzzyMatching: false,
+        supportsWildcard: true,
+        staticWado: true,
+        singlepart: 'video',
+        bulkDataURI: {
+          enabled: true,
+          relativeResolution: 'studies',
+        },
+      },
+    },
+    {
+      namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
+      sourceName: 'orthanc',
+      configuration: {
+        friendlyName: 'local Orthanc DICOMWeb Server',
+        name: 'DCM4CHEE',
+        wadoUriRoot: 'http://localhost/pacs/dicom-web',
+        qidoRoot: 'http://localhost/pacs/dicom-web',
+        wadoRoot: 'http://localhost/pacs/dicom-web',
+        qidoSupportsIncludeField: true,
+        supportsReject: true,
+        dicomUploadEnabled: true,
+        imageRendering: 'wadors',
+        thumbnailRendering: 'wadors',
+        enableStudyLazyLoad: true,
+        supportsFuzzyMatching: true,
+        supportsWildcard: true,
+        omitQuotationForMultipartRequest: true,
+        bulkDataURI: {
+          enabled: true,
+        },
+      },
+    },
+
+    {
+      namespace: '@ohif/extension-default.dataSourcesModule.dicomwebproxy',
+      sourceName: 'dicomwebproxy',
+      configuration: {
+        friendlyName: 'dicomweb delegating proxy',
+        name: 'dicomwebproxy',
+      },
+    },
+    {
+      namespace: '@ohif/extension-default.dataSourcesModule.dicomjson',
+      sourceName: 'dicomjson',
+      configuration: {
+        friendlyName: 'dicom json',
+        name: 'json',
+      },
+    },
+    {
+      namespace: '@ohif/extension-default.dataSourcesModule.dicomlocal',
+      sourceName: 'dicomlocal',
+      configuration: {
+        friendlyName: 'dicom local',
+      },
+    },
   ],
   httpErrorHandler: error => {
-    // This is 429 when rejected from the public idc sandbox too often.
     console.warn(error.status);
-
-    // Could use services manager here to bring up a dialog/modal if needed.
     console.warn('test, navigate to https://ohif.org/');
   },
 };

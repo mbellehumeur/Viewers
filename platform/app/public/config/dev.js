@@ -16,7 +16,62 @@ window.config = {
   // whiteLabeling: {},
   extensions: [],
   modes: [],
-  customizationService: ['@ohif/extension-default.customizationModule.theme'],
+  customizationService: [
+    '@ohif/extension-default.customizationModule.theme',
+    {
+      // Top-right badge: live OHIFCornerstoneRenderingEngine viewport `.type`
+      // (volume3d vs volume3d next). Shown when only3D (or any volume3d pane)
+      // has hideOverlays disabled.
+      'viewportOverlay.topRight': {
+        $push: [
+          {
+            id: 'ViewportType',
+            inheritsFrom: 'ohif.overlayItem',
+            title: 'OHIFCornerstoneRenderingEngine viewport type',
+            contentF: ({ viewportId, servicesManager, activeRenderMode }) => {
+              const viewport = servicesManager?.services?.cornerstoneViewportService
+                ?.getRenderingEngine()
+                ?.getViewport(viewportId);
+              const type = viewport?.type;
+              const renderMode =
+                activeRenderMode ??
+                (typeof viewport?.getActiveRenderMode === 'function'
+                  ? viewport.getActiveRenderMode()
+                  : undefined);
+
+              let label = null;
+              if (type === 'volume3dNext') {
+                label = 'volume3d next';
+              } else if (type === 'volume3d') {
+                label = 'volume3d';
+              }
+
+              if (!label) {
+                return null;
+              }
+
+              if (renderMode === 'mviewVolume3d') {
+                return `${label} · mview`;
+              }
+              if (renderMode === 'slicerLiveVolume3d') {
+                return `${label} · slicerlive`;
+              }
+              if (renderMode === 'fuberlinVolume3D') {
+                return `${label} · fuberlin`;
+              }
+              if (renderMode === 'webgpuVolume3d') {
+                return `${label} · webgpu`;
+              }
+              if (renderMode === 'vtkVolume3d') {
+                return `${label} · vtk`;
+              }
+              return label;
+            },
+          },
+        ],
+      },
+    },
+  ],
 
   // URL-driven customizations (?customization=). The `default` prefix (no
   // slashes) is used for values without a leading slash; every other prefix
@@ -27,6 +82,12 @@ window.config = {
     default: './customizations/',
   },
 
+  // Native GenericViewport with WebGPU render backend (local cs3d WebGPU branch).
+  // Override per-session: ?useNextViewports=false or ?viewportRendering=webgl
+  genericViewports: {
+    enabled: true,
+  },
+
   showStudyList: true,
   // some windows systems have issues with more than 3 web workers
   maxNumberOfWebWorkers: 3,
@@ -34,6 +95,9 @@ window.config = {
   showWarningMessageForCrossOrigin: true,
   showCPUFallbackMessage: true,
   showLoadingIndicator: true,
+  investigationalUseDialog: {
+    option: 'never',
+  },
   experimentalStudyBrowserSort: false,
   strictZSpacingForVolumeViewport: true,
   groupEnabledModesFirst: true,

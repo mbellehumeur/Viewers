@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { useViewportDisplaySets } from '../../hooks/useViewportDisplaySets';
 import SelectItemWithModality from '../SelectItemWithModality';
 import { useViewportRendering } from '../../hooks';
+import { shouldUseSlicerLiveSegHydration } from '../../utils/hydrateSlicerLiveSegOverlay';
 
 function ViewportDataOverlayMenu({ viewportId }: withAppTypes<{ viewportId: string }>) {
   const { commandsManager, servicesManager } = useSystem();
@@ -27,7 +28,8 @@ function ViewportDataOverlayMenu({ viewportId }: withAppTypes<{ viewportId: stri
   const [pendingSegmentations, setPendingSegmentations] = useState<string[]>([]);
   const { toggleColorbar } = useViewportRendering(viewportId);
 
-  const { hangingProtocolService, toolbarService } = servicesManager.services;
+  const { hangingProtocolService, toolbarService, displaySetService } =
+    servicesManager.services;
 
   const {
     backgroundDisplaySet,
@@ -75,10 +77,7 @@ function ViewportDataOverlayMenu({ viewportId }: withAppTypes<{ viewportId: stri
     });
 
     setTimeout(() => {
-      commandsManager.runCommand('addDisplaySetAsLayer', {
-        viewportId,
-        displaySetInstanceUID: newDisplaySetInstanceUID,
-      });
+      handleAddDisplaySetAsLayer(newDisplaySetInstanceUID);
     }, 0);
   };
 
@@ -105,9 +104,22 @@ function ViewportDataOverlayMenu({ viewportId }: withAppTypes<{ viewportId: stri
   };
 
   /**
-   * Add a display set as a layer
+   * Add a display set as a layer. SlicerLive Volume3D + SEG skips remount so
+   * CT VR stays visible while SEG decode / SDF bake runs.
    */
   const handleAddDisplaySetAsLayer = (displaySetInstanceUID: string) => {
+    const displaySet = displaySetService.getDisplaySetByUID(displaySetInstanceUID);
+    if (
+      displaySet?.Modality === 'SEG' &&
+      shouldUseSlicerLiveSegHydration(viewportId, servicesManager)
+    ) {
+      void commandsManager.runCommand('hydrateSlicerLiveSegmentationOverlay', {
+        viewportId,
+        displaySetInstanceUID,
+      });
+      return;
+    }
+
     commandsManager.runCommand('addDisplaySetAsLayer', {
       viewportId,
       displaySetInstanceUID,
