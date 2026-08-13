@@ -471,9 +471,11 @@ async function _loadSegments({
 
   const tolerance = 0.001;
   const onProgress = evt => {
-    const { percentComplete } = evt.detail;
+    const { percentComplete, filledSliceCount } = evt.detail ?? {};
     segmentationService._broadcastEvent(segmentationService.EVENTS.SEGMENT_LOADING_COMPLETE, {
       percentComplete,
+      filledSliceCount,
+      segDisplaySet,
     });
   };
   eventTarget.addEventListener(Enums.Events.SEGMENTATION_LOAD_PROGRESS, onProgress);
@@ -521,6 +523,14 @@ async function _loadSegments({
         ),
         frameImageIds,
         concurrency: SEG_FRAME_DECODE_CONCURRENCY,
+        onLabelMapImagesCreated: ({ labelMapImages, segMetadata }) => {
+          // Live scaffolding — progressive SlicerLive hydrate reads these mid-decode.
+          segDisplaySet.labelMapImages = [labelMapImages];
+          if (segMetadata) {
+            (segDisplaySet as { progressiveSegMetadata?: unknown }).progressiveSegMetadata =
+              segMetadata;
+          }
+        },
       }
     );
   } finally {

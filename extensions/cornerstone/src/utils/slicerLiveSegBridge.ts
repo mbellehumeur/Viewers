@@ -1,9 +1,12 @@
 import {
+  beginSlicerLiveVolume3DSegmentation,
   cache,
   clearSlicerLiveVolume3DSegmentation,
+  finalizeSlicerLiveVolume3DSegmentation,
   getSlicerLiveVolume3D,
   metaData,
   setSlicerLiveVolume3DSegmentation,
+  updateSlicerLiveVolume3DSegmentationSlices,
 } from '@cornerstonejs/core';
 
 type SegmentationServiceLike = {
@@ -415,8 +418,360 @@ export async function applySlicerLiveSegmentationFromOHIF(
 export async function clearSlicerLiveSegmentationForViewport(
   viewportId: string
 ): Promise<boolean> {
+  progressiveSessions.delete(viewportId);
   if (!getSlicerLiveVolume3D(viewportId)) {
     return false;
   }
   return clearSlicerLiveVolume3DSegmentation(viewportId);
+}
+
+type ProgressiveSession = {
+  begun: boolean;
+  uploadedSlices: Uint8Array;
+  dimensions: [number, number, number];
+};
+
+const progressiveSessions = new Map<string, ProgressiveSession>();
+
+type LabelmapImageLike = {
+  columns?: number;
+  width?: number;
+  rows?: number;
+  height?: number;
+  voxelManager?: { getScalarData?: () => ArrayLike<number> };
+  getPixelData?: () => ArrayLike<number>;
+  referencedImageId?: string;
+  imageId?: string;
+};
+
+type ProgressiveSegDisplaySet = {
+  displaySetInstanceUID?: string;
+  labelMapImages?: LabelmapImageLike[][];
+  referencedImageIds?: string[];
+  progressiveSegMetadata?: {
+    data?: Array<{
+      SegmentNumber?: number;
+      SegmentLabel?: string;
+      rgba?: number[];
+      RecommendedDisplayCIELabValue?: number[];
+    }>;
+  };
+  segments?: Record<
+    string,
+    { segmentIndex?: number; label?: string; color?: number[] }
+  >;
+};
+
+/**
+ * Pack whatever SEG labelmap slices are already filled (primary group).
+ * Missing slices stay zero; loadedSliceIndices lists z with any non-zero voxels
+ * or a non-empty scalar buffer.
+ */
+export function materializeSegLabelmapProgressive(
+  displaySet: ProgressiveSegDisplaySet
+):
+  | {
+      lab: Uint8Array;
+      dimensions: [number, number, number];
+      ijkToWorld: number[];
+      loadedSliceIndices: number[];
+    }
+  | undefined {
+  const group = displaySet.labelMapImages?.[0];
+  if (!group?.length) {
+    return undefined;
+  }
+
+  const cols = Number(group[0].columns ?? group[0].width);
+  const rows = Number(group[0].rows ?? group[0].height);
+  if (!cols || !rows) {
+    return undefined;
+  }
+
+  const depth = group.length;
+  const sliceLen = cols * rows;
+  const lab = new Uint8Array(sliceLen * depth);
+  const loadedSliceIndices: number[] = [];
+
+  for (let z = 0; z < depth; z++) {
+    const image = group[z];
+    const scalars =
+      image?.voxelManager?.getScalarData?.() ?? image?.getPixelData?.();
+    if (!scalars || scalars.length === 0) {
+      continue;
+    }
+    let any = false;
+    const off = z * sliceLen;
+    const n = Math.min(sliceLen, scalars.length);
+    for (let i = 0; i < n; i++) {
+      const v = Number(scalars[i]);
+      if (!Number.isFinite(v) || v <= 0) {
+        continue;
+      }
+      lab[off + i] = Math.max(0, Math.min(255, Math.round(v)));
+      any = true;
+    }
+    if (any) {
+      loadedSliceIndices.push(z);
+    }
+  }
+
+  if (loadedSliceIndices.length === 0 && !group.some(img => img)) {
+    return undefined;
+  }
+
+  const referencedImageIds =
+    displaySet.referencedImageIds ??
+    group
+      .map(img => img.referencedImageId)
+      .filter((id): id is string => Boolean(id));
+
+  const dims: [number, number, number] = [cols, rows, depth];
+  const ijkToWorld = resolveGeometryIjkToWorld(dims, referencedImageIds, group);
+
+  return { lab, dimensions: dims, ijkToWorld, loadedSliceIndices };
+}
+
+function resolveGeometryIjkToWorld(
+  dims: [number, number, number],
+  referencedImageIds: string[],
+  group: LabelmapImageLike[]
+): number[] {
+  const volumes = cache.getVolumes?.() ?? [];
+  const volume = volumes.find(v => {
+    if (!v?.dimensions || !v?.spacing) {
+      return false;
+    }
+    return (
+      v.dimensions[0] === dims[0] &&
+      v.dimensions[1] === dims[1] &&
+      v.dimensions[2] === dims[2]
+    );
+  });
+  if (volume?.spacing) {
+    return buildIjkToWorld(
+      (volume.origin ?? [0, 0, 0]) as [number, number, number],
+      volume.spacing as [number, number, number],
+      volume.direction
+    );
+  }
+
+  const firstId = referencedImageIds[0] ?? group[0]?.referencedImageId;
+  const lastId =
+    referencedImageIds[referencedImageIds.length - 1] ??
+    group[group.length - 1]?.referencedImageId;
+  if (!firstId) {
+    return buildIjkToWorld([0, 0, 0], [1, 1, 1]);
+  }
+
+  const firstPlane = metaData.get('imagePlaneModule', firstId) as
+    | {
+        imagePositionPatient?: number[];
+        rowCosines?: number[];
+        columnCosines?: number[];
+        rowPixelSpacing?: number;
+        columnPixelSpacing?: number;
+        sliceThickness?: number;
+      }
+    | undefined;
+  const lastPlane = lastId
+    ? (metaData.get('imagePlaneModule', lastId) as
+        | { imagePositionPatient?: number[] }
+        | undefined)
+    : undefined;
+
+  if (!firstPlane?.imagePositionPatient) {
+    return buildIjkToWorld([0, 0, 0], [1, 1, 1]);
+  }
+
+  const origin = firstPlane.imagePositionPatient as [number, number, number];
+  const row = firstPlane.rowCosines ?? [1, 0, 0];
+  const col = firstPlane.columnCosines ?? [0, 1, 0];
+  const sx = firstPlane.columnPixelSpacing ?? 1;
+  const sy = firstPlane.rowPixelSpacing ?? 1;
+  let sz = firstPlane.sliceThickness ?? 1;
+  let kDir = [
+    row[1] * col[2] - row[2] * col[1],
+    row[2] * col[0] - row[0] * col[2],
+    row[0] * col[1] - row[1] * col[0],
+  ];
+  if (lastPlane?.imagePositionPatient && dims[2] > 1) {
+    const dx = lastPlane.imagePositionPatient[0] - origin[0];
+    const dy = lastPlane.imagePositionPatient[1] - origin[1];
+    const dz = lastPlane.imagePositionPatient[2] - origin[2];
+    const span = Math.hypot(dx, dy, dz);
+    if (span > 1e-6) {
+      sz = span / (dims[2] - 1);
+      kDir = [dx / span, dy / span, dz / span];
+    }
+  }
+  return buildIjkToWorld(
+    origin,
+    [sx, sy, sz],
+    [
+      row[0],
+      row[1],
+      row[2],
+      col[0],
+      col[1],
+      col[2],
+      kDir[0],
+      kDir[1],
+      kDir[2],
+    ]
+  );
+}
+
+function colorsFromProgressiveDisplaySet(
+  displaySet: ProgressiveSegDisplaySet,
+  viewportId: string,
+  segmentationId: string,
+  segmentationService?: SegmentationServiceLike
+): {
+  colors: Array<[number, number, number, number]>;
+  names: Record<number, string>;
+} {
+  const colors: Array<[number, number, number, number]> = [];
+  const names: Record<number, string> = {};
+
+  const metaDataList = displaySet.progressiveSegMetadata?.data;
+  if (metaDataList?.length) {
+    for (let i = 1; i < metaDataList.length; i++) {
+      const entry = metaDataList[i];
+      const segmentIndex = Number(entry?.SegmentNumber ?? i);
+      if (!Number.isFinite(segmentIndex) || segmentIndex < 1) {
+        continue;
+      }
+      const rgb =
+        rgbaToUnitRgb(entry.rgba) ?? defaultSegmentColor(segmentIndex);
+      colors.push([segmentIndex, rgb[0], rgb[1], rgb[2]]);
+      if (entry.SegmentLabel) {
+        names[segmentIndex] = entry.SegmentLabel;
+      }
+    }
+  }
+
+  if (colors.length === 0 && displaySet.segments) {
+    for (const key of Object.keys(displaySet.segments)) {
+      const segment = displaySet.segments[key];
+      const segmentIndex = Number(segment?.segmentIndex ?? key);
+      if (!Number.isFinite(segmentIndex) || segmentIndex < 1) {
+        continue;
+      }
+      const rgb =
+        rgbaToUnitRgb(segment.color) ?? defaultSegmentColor(segmentIndex);
+      colors.push([segmentIndex, rgb[0], rgb[1], rgb[2]]);
+      if (segment.label) {
+        names[segmentIndex] = segment.label;
+      }
+    }
+  }
+
+  if (colors.length === 0 && segmentationService) {
+    const segmentation = segmentationService.getSegmentation(segmentationId);
+    const segments = segmentation?.segments ?? {};
+    for (const key of Object.keys(segments)) {
+      const segment = segments[key];
+      const segmentIndex = Number(segment?.segmentIndex ?? key);
+      if (!Number.isFinite(segmentIndex) || segmentIndex < 1) {
+        continue;
+      }
+      const rgba = segmentationService.getSegmentColor(
+        viewportId,
+        segmentationId,
+        segmentIndex
+      );
+      const rgb = rgbaToUnitRgb(rgba) ?? defaultSegmentColor(segmentIndex);
+      colors.push([segmentIndex, rgb[0], rgb[1], rgb[2]]);
+      if (segment?.label) {
+        names[segmentIndex] = segment.label;
+      }
+    }
+  }
+
+  return { colors, names };
+}
+
+/**
+ * Progressive SlicerLive SEG apply from a partially-filled displaySet.labelMapImages.
+ * Call on load progress; call finalizeSlicerLiveSegmentationProgressive when load completes.
+ */
+export async function applySlicerLiveSegmentationProgressive(params: {
+  viewportId: string;
+  displaySet: ProgressiveSegDisplaySet;
+  segmentationId: string;
+  segmentationService?: SegmentationServiceLike;
+}): Promise<boolean> {
+  const { viewportId, displaySet, segmentationId, segmentationService } = params;
+  if (!getSlicerLiveVolume3D(viewportId)) {
+    return false;
+  }
+
+  const progressive = materializeSegLabelmapProgressive(displaySet);
+  if (!progressive) {
+    return false;
+  }
+
+  let session = progressiveSessions.get(viewportId);
+  if (!session?.begun) {
+    const { colors, names } = colorsFromProgressiveDisplaySet(
+      displaySet,
+      viewportId,
+      segmentationId,
+      segmentationService
+    );
+    if (colors.length === 0) {
+      return false;
+    }
+    const begun = await beginSlicerLiveVolume3DSegmentation(viewportId, {
+      dimensions: progressive.dimensions,
+      ijkToWorld: progressive.ijkToWorld,
+      colors,
+      names,
+    });
+    if (!begun) {
+      return false;
+    }
+    session = {
+      begun: true,
+      uploadedSlices: new Uint8Array(progressive.dimensions[2]),
+      dimensions: progressive.dimensions,
+    };
+    progressiveSessions.set(viewportId, session);
+  }
+
+  const newIndices: number[] = [];
+  for (const z of progressive.loadedSliceIndices) {
+    if (!session.uploadedSlices[z]) {
+      newIndices.push(z);
+    }
+  }
+  if (newIndices.length === 0) {
+    return true;
+  }
+
+  const updated = await updateSlicerLiveVolume3DSegmentationSlices(viewportId, {
+    lab: progressive.lab,
+    dimensions: progressive.dimensions,
+    sliceIndices: newIndices,
+  });
+  if (updated) {
+    for (const z of newIndices) {
+      session.uploadedSlices[z] = 1;
+    }
+  }
+  return updated;
+}
+
+/** Settle SDF after progressive SEG streaming completes. */
+export async function finalizeSlicerLiveSegmentationProgressive(
+  viewportId: string
+): Promise<boolean> {
+  const session = progressiveSessions.get(viewportId);
+  if (!session?.begun) {
+    return false;
+  }
+  const ok = await finalizeSlicerLiveVolume3DSegmentation(viewportId);
+  progressiveSessions.delete(viewportId);
+  return ok;
 }

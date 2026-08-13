@@ -48,7 +48,12 @@ import type { IViewportBackend } from './backends/IViewportBackend';
 import type { IViewportServiceInternals } from './backends/IViewportServiceInternals';
 import { LegacyViewportBackend } from './backends/LegacyViewportBackend';
 import { NextViewportBackend } from './backends/NextViewportBackend';
-import { applySlicerLiveSegmentationFromOHIF } from '../../utils/slicerLiveSegBridge';
+import {
+  applySlicerLiveSegmentationFromOHIF,
+  applySlicerLiveSegmentationProgressive,
+  finalizeSlicerLiveSegmentationProgressive,
+} from '../../utils/slicerLiveSegBridge';
+import { shouldUseSlicerLiveSegHydration } from '../../utils/hydrateSlicerLiveSegOverlay';
 
 const EVENTS = {
   VIEWPORT_DATA_CHANGED: 'event::cornerstoneViewportService:viewportDataChanged',
@@ -1366,6 +1371,16 @@ class CornerstoneViewportService
       // SlicerLive Volume3D: paint SEG as SDF SegmentField (VTK actors are not visible).
       if (displaySet.Modality === 'SEG') {
         try {
+          if (shouldUseSlicerLiveSegHydration(viewport.id, this.servicesManager)) {
+            await applySlicerLiveSegmentationProgressive({
+              viewportId: viewport.id,
+              displaySet,
+              segmentationId,
+              segmentationService,
+            });
+            await finalizeSlicerLiveSegmentationProgressive(viewport.id);
+          }
+          // Final one-shot for correct colours / boundary parity once CS state exists.
           await applySlicerLiveSegmentationFromOHIF(
             viewport.id,
             segmentationId,
@@ -1391,16 +1406,24 @@ class CornerstoneViewportService
       // never fires) cannot leave this promise — and the viewport setup awaiting it —
       // hanging indefinitely.
       const SEG_LOADING_TIMEOUT_MS = 120000;
+      const useSlicerLiveProgressive = shouldUseSlicerLiveSegHydration(
+        viewport.id,
+        this.servicesManager
+      );
 
       return new Promise<void>(resolve => {
         let settled = false;
         let timeoutId;
+        let progressiveRaf = 0;
 
         // Final resolution — extra calls are harmless (resolve is a no-op after
         // the first), which lets the timeout stay armed while a representation
         // apply is in flight and still bound it.
         const finish = () => {
           clearTimeout(timeoutId);
+          if (progressiveRaf) {
+            cancelAnimationFrame(progressiveRaf);
+          }
           resolve();
         };
 
@@ -1408,8 +1431,41 @@ class CornerstoneViewportService
         const settleWithoutApply = () => {
           settled = true;
           unsubscribe();
+          unsubscribeProgress?.();
           finish();
         };
+
+        let unsubscribeProgress: (() => void) | undefined;
+        if (useSlicerLiveProgressive) {
+          const progressSub = segmentationService.subscribe(
+            segmentationService.EVENTS.SEGMENT_LOADING_COMPLETE,
+            (evt: {
+              segDisplaySet?: OhifTypes.DisplaySet;
+              percentComplete?: number;
+            }) => {
+              if (
+                settled ||
+                (evt.segDisplaySet &&
+                  evt.segDisplaySet.displaySetInstanceUID !== segmentationId)
+              ) {
+                return;
+              }
+              if (progressiveRaf) {
+                return;
+              }
+              progressiveRaf = requestAnimationFrame(() => {
+                progressiveRaf = 0;
+                void applySlicerLiveSegmentationProgressive({
+                  viewportId: viewport.id,
+                  displaySet,
+                  segmentationId,
+                  segmentationService,
+                });
+              });
+            }
+          );
+          unsubscribeProgress = progressSub.unsubscribe;
+        }
 
         const { unsubscribe } = segmentationService.subscribe(
           segmentationService.EVENTS.SEGMENTATION_LOADING_COMPLETE,
@@ -1427,6 +1483,7 @@ class CornerstoneViewportService
             // NOT cleared here — a hung apply stays bounded.
             settled = true;
             unsubscribe();
+            unsubscribeProgress?.();
 
             try {
               await applyRepresentation();

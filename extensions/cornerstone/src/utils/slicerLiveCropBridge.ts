@@ -23,6 +23,7 @@ export function attachSlicerLiveCropBridge(viewportId: string): boolean {
 
   const { canvas, renderer } = entry;
   let hoveredId: number | null = null;
+  let dragging = false;
 
   const cssCursor = (e: PointerEvent) => {
     const r = canvas.getBoundingClientRect();
@@ -48,6 +49,8 @@ export function attachSlicerLiveCropBridge(viewportId: string): boolean {
     if (!renderer.beginCropDrag(hit.id)) {
       return;
     }
+    dragging = true;
+    hoveredId = hit.id;
     canvas.setPointerCapture(e.pointerId);
     canvas.style.cursor = hit.cursor || 'grabbing';
 
@@ -59,6 +62,7 @@ export function attachSlicerLiveCropBridge(viewportId: string): boolean {
     const onUp = (ev: PointerEvent) => {
       ev.stopPropagation();
       renderer.endCropDrag();
+      dragging = false;
       try {
         canvas.releasePointerCapture(ev.pointerId);
       } catch {
@@ -72,6 +76,8 @@ export function attachSlicerLiveCropBridge(viewportId: string): boolean {
         cssCursor(ev).w,
         cssCursor(ev).h
       );
+      hoveredId = hover?.id ?? null;
+      renderer.setCropHover(hoveredId);
       canvas.style.cursor = hover ? hover.cursor || 'grab' : '';
     };
     window.addEventListener('pointermove', onMove, true);
@@ -79,7 +85,7 @@ export function attachSlicerLiveCropBridge(viewportId: string): boolean {
   };
 
   const onHover = (e: PointerEvent) => {
-    if (!getSlicerLiveVolume3DCropEnabled(viewportId)) {
+    if (dragging || !getSlicerLiveVolume3DCropEnabled(viewportId)) {
       return;
     }
     const { x, y, w, h } = cssCursor(e);

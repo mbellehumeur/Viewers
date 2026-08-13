@@ -52,8 +52,21 @@ export default {
       ({ activeViewportId, servicesManager, commandsManager, isHangingProtocolLayout }) =>
         async displaySetInstanceUID => {
           const { hangingProtocolService, uiNotificationService } = servicesManager.services;
-          let updatedViewports = [];
           const viewportId = activeViewportId;
+
+          // SlicerLive Volume3D + SEG: hydrate in place (no remount / blank flash).
+          const hydrated = await commandsManager.runCommand(
+            'hydrateSlicerLiveSegmentationOverlay',
+            {
+              viewportId,
+              displaySetInstanceUID,
+            }
+          );
+          if (hydrated) {
+            return;
+          }
+
+          let updatedViewports = [];
 
           try {
             updatedViewports = hangingProtocolService.getViewportsRequireUpdate(

@@ -39,6 +39,7 @@ import {
 import { isNextViewportsEnabled } from '../../utils/nextViewports';
 import { isNextViewport } from '../ViewportService/adapter';
 import { clearSlicerLiveSegmentationForViewport } from '../../utils/slicerLiveSegBridge';
+import { clearAppliedSlicerLiveSegForViewport } from '../../utils/hydrateSlicerLiveSegOverlay';
 
 const { DefaultHistoryMemo } = csUtils.HistoryMemo;
 
@@ -1421,6 +1422,7 @@ class SegmentationService extends PubSubService implements ISegmentationServiceI
     cstSegmentation.removeSegmentationRepresentations(viewportId, specifier);
     // SlicerLive Volume3D composites SEG via SDF SegmentField — clear when OHIF removes overlay.
     void clearSlicerLiveSegmentationForViewport(viewportId);
+    clearAppliedSlicerLiveSegForViewport(viewportId);
   }
 
   /**

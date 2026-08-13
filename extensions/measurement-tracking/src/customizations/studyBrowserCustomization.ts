@@ -8,17 +8,33 @@ type CheckHasDirtyAndSimplifiedModeProps = {
 
 const onDoubleClickHandler = {
   callbacks: [
-    ({ activeViewportId, servicesManager, isHangingProtocolLayout, appConfig }) =>
+    ({ activeViewportId, servicesManager, commandsManager, isHangingProtocolLayout, appConfig }) =>
       async displaySetInstanceUID => {
         const { hangingProtocolService, viewportGridService, uiNotificationService } =
           servicesManager.services;
-        let updatedViewports = [];
         const viewportId = activeViewportId;
+
+        // SlicerLive Volume3D + SEG: hydrate in place (no remount / blank flash).
+        if (commandsManager) {
+          const hydrated = await commandsManager.runCommand(
+            'hydrateSlicerLiveSegmentationOverlay',
+            {
+              viewportId,
+              displaySetInstanceUID,
+            }
+          );
+          if (hydrated) {
+            return;
+          }
+        }
+
         const haveDirtyMeasurementsInSimplifiedMode = checkHasDirtyAndSimplifiedMode({
           servicesManager,
           appConfig,
           displaySetInstanceUID,
         });
+
+        let updatedViewports = [];
 
         try {
           if (!haveDirtyMeasurementsInSimplifiedMode) {
