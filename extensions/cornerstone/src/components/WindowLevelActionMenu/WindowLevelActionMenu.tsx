@@ -1,11 +1,13 @@
 import React, { ReactElement, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getSlicerLiveVolume3D } from '@cornerstonejs/core';
 import { AllInOneMenu } from '@ohif/ui-next';
 import { Colormap } from './Colormap';
 import { Colorbar } from './Colorbar';
 import { WindowLevel } from './WindowLevel';
 import { VolumeRenderingPresets } from './VolumeRenderingPresets';
 import { VolumeRenderingOptions } from './VolumeRenderingOptions';
+import { SlicerLiveOptions } from './SlicerLiveOptions';
 import { useViewportRendering } from '../../hooks/useViewportRendering';
 import i18n from 'i18next';
 
@@ -54,6 +56,7 @@ export function WindowLevelActionMenuContent({
     volumeRenderingPresets,
     volumeRenderingQualityRange,
   } = useViewportRendering(viewportId);
+  const isSlicerLive = Boolean(is3DVolume && getSlicerLiveVolume3D(viewportId));
 
   return (
     <AllInOneMenu.Menu
@@ -94,6 +97,14 @@ export function WindowLevelActionMenuContent({
         {volumeRenderingQualityRange && is3DVolume && (
           <AllInOneMenu.SubMenu itemLabel={t('Rendering Options')}>
             <VolumeRenderingOptions viewportId={viewportId} />
+          </AllInOneMenu.SubMenu>
+        )}
+
+        {isSlicerLive && (
+          <AllInOneMenu.SubMenu itemLabel={t('Performance tuning')}>
+            <AllInOneMenu.ItemPanel>
+              <SlicerLiveOptions viewportId={viewportId} />
+            </AllInOneMenu.ItemPanel>
           </AllInOneMenu.SubMenu>
         )}
       </AllInOneMenu.ItemPanel>

@@ -130,6 +130,9 @@ const cornerstoneExtension: Types.Extensions.Extension = {
 
     toolbarService.registerEventForToolbarUpdate(cornerstoneViewportService, [
       cornerstoneViewportService.EVENTS.VIEWPORT_DATA_CHANGED,
+      // Native volume mounts broadcast this after setDisplaySets; DATA_CHANGED
+      // can fire earlier on custom image-load strategies before SlicerLive registers.
+      cornerstoneViewportService.EVENTS.VIEWPORT_VOLUMES_CHANGED,
     ]);
 
     toolbarService.registerEventForToolbarUpdate(segmentationService, [

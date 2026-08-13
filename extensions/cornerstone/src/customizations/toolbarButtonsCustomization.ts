@@ -618,6 +618,20 @@ const toolbarButtons: Button[] = [
     },
   },
   {
+    id: 'SlicerLiveCrop',
+    uiType: 'ohif.toolButton',
+    props: {
+      icon: 'tool-crop',
+      label: i18n.t('Buttons:Crop'),
+      tooltip: i18n.t('Buttons:Toggle SlicerLive volume crop'),
+      commands: 'toggleSlicerLiveVolumeCrop',
+      evaluate: {
+        name: 'evaluate.slicerLiveVolumeCrop',
+        disabledText: i18n.t('Buttons:Select a SlicerLive 3D viewport to enable crop'),
+      },
+    },
+  },
+  {
     id: 'Capture',
     uiType: 'ohif.toolButton',
     props: {
@@ -721,6 +735,7 @@ export const toolbarSections = {
     'Zoom',
     'Pan',
     'TrackballRotate',
+    'SlicerLiveCrop',
     'WindowLevel',
     'Capture',
     'Layout',

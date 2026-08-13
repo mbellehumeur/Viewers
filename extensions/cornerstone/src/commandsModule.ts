@@ -11,6 +11,26 @@ import {
   isFuberlinVolume3DRenderMode,
   isFuberlinVolume3DProjection,
   isFuberlinVolume3DPresentQuality,
+  setMviewVolume3DRenderMode,
+  setMviewVolume3DProjection,
+  setMviewVolume3DPresentQuality,
+  setMviewVolume3DThreshold,
+  isMviewVolume3DRenderMode,
+  isMviewVolume3DProjection,
+  isMviewVolume3DPresentQuality,
+  setSlicerLiveVolume3DShade,
+  setSlicerLiveVolume3DLighting,
+  setSlicerLiveVolume3DInteractionQuality,
+  setSlicerLiveVolume3DTargetMs,
+  setSlicerLiveVolume3DMotionBudget,
+  setSlicerLiveVolume3DSampleStep,
+  setSlicerLiveVolume3DAccumulate,
+  setSlicerLiveVolume3DSettleSamples,
+  setSlicerLiveVolume3DShadeCoeffs,
+  setSlicerLiveVolume3DClim,
+  getSlicerLiveVolume3D,
+  getSlicerLiveVolume3DCropEnabled,
+  setSlicerLiveVolume3DCropEnabled,
 } from '@cornerstonejs/core';
 import {
   ToolGroupManager,
@@ -66,6 +86,10 @@ import { getUpdatedViewportsForSegmentation } from './utils/hydrationUtils';
 import { SegmentationRepresentations } from '@cornerstonejs/tools/enums';
 import { EasingFunctionEnum } from './utils/transitions';
 import { createSegmentationForViewport } from './utils/createSegmentationForViewport';
+import {
+  attachSlicerLiveCropBridge,
+  detachSlicerLiveCropBridge,
+} from './utils/slicerLiveCropBridge';
 import { utilities as segmentationUtilities } from '@cornerstonejs/tools/segmentation';
 import i18n from '@ohif/i18n';
 
@@ -1529,6 +1553,186 @@ function commandsModule({
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
       viewport?.render?.();
     },
+    /**
+     * Set mview raymarch mode for an mview Volume3D present
+     * (surface | composite | mip).
+     */
+    setMviewVolumeRenderMode: ({ viewportId, mode }) => {
+      if (!viewportId || !isMviewVolume3DRenderMode(mode)) {
+        return;
+      }
+      if (!setMviewVolume3DRenderMode(viewportId, mode)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setMviewVolumeProjection: ({ viewportId, projection }) => {
+      if (!viewportId || !isMviewVolume3DProjection(projection)) {
+        return;
+      }
+      if (!setMviewVolume3DProjection(viewportId, projection)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.setViewState?.(viewport.getViewState?.() ?? {});
+      viewport?.render?.();
+    },
+    setMviewVolumeThreshold: ({ viewportId, threshold }) => {
+      if (!viewportId || !Number.isFinite(threshold)) {
+        return;
+      }
+      if (!setMviewVolume3DThreshold(viewportId, threshold)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setMviewVolumePresentQuality: ({ viewportId, quality }) => {
+      if (!viewportId || !isMviewVolume3DPresentQuality(quality)) {
+        return;
+      }
+      if (!setMviewVolume3DPresentQuality(viewportId, quality)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setSlicerLiveVolumeShade: ({ viewportId, shade }) => {
+      if (!viewportId || typeof shade !== 'boolean') {
+        return;
+      }
+      if (!setSlicerLiveVolume3DShade(viewportId, shade)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setSlicerLiveVolumeLighting: ({ viewportId, options }) => {
+      if (!viewportId || !options || typeof options !== 'object') {
+        return;
+      }
+      if (!setSlicerLiveVolume3DLighting(viewportId, options)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setSlicerLiveVolumeInteractionQuality: ({ viewportId, quality }) => {
+      if (!viewportId || !Number.isFinite(quality)) {
+        return;
+      }
+      if (!setSlicerLiveVolume3DInteractionQuality(viewportId, quality)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setSlicerLiveVolumeTargetMs: ({ viewportId, targetMs }) => {
+      if (!viewportId || !Number.isFinite(targetMs)) {
+        return;
+      }
+      if (!setSlicerLiveVolume3DTargetMs(viewportId, targetMs)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setSlicerLiveVolumeMotionBudget: ({ viewportId, budget }) => {
+      if (!viewportId || !Number.isFinite(budget)) {
+        return;
+      }
+      if (!setSlicerLiveVolume3DMotionBudget(viewportId, budget)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setSlicerLiveVolumeSampleStep: ({ viewportId, stepMm }) => {
+      if (!viewportId || !Number.isFinite(stepMm)) {
+        return;
+      }
+      if (!setSlicerLiveVolume3DSampleStep(viewportId, stepMm)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setSlicerLiveVolumeAccumulate: ({ viewportId, accumulate }) => {
+      if (!viewportId || typeof accumulate !== 'boolean') {
+        return;
+      }
+      if (!setSlicerLiveVolume3DAccumulate(viewportId, accumulate)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setSlicerLiveVolumeSettleSamples: ({ viewportId, count }) => {
+      if (!viewportId || !Number.isFinite(count)) {
+        return;
+      }
+      if (!setSlicerLiveVolume3DSettleSamples(viewportId, count)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setSlicerLiveVolumeShadeCoeffs: ({ viewportId, coeffs }) => {
+      if (!viewportId || !Array.isArray(coeffs) || coeffs.length < 4) {
+        return;
+      }
+      if (
+        !setSlicerLiveVolume3DShadeCoeffs(viewportId, [
+          Number(coeffs[0]),
+          Number(coeffs[1]),
+          Number(coeffs[2]),
+          Number(coeffs[3]),
+        ])
+      ) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setSlicerLiveVolumeClim: ({ viewportId, clim }) => {
+      if (!viewportId || !Array.isArray(clim) || clim.length < 2) {
+        return;
+      }
+      if (
+        !setSlicerLiveVolume3DClim(viewportId, [Number(clim[0]), Number(clim[1])])
+      ) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setSlicerLiveVolumeCropEnabled: ({ viewportId, enabled }) => {
+      const id = viewportId || viewportGridService.getActiveViewportId();
+      if (!id || !getSlicerLiveVolume3D(id)) {
+        return;
+      }
+      const next = typeof enabled === 'boolean' ? enabled : true;
+      if (!setSlicerLiveVolume3DCropEnabled(id, next)) {
+        return;
+      }
+      if (next) {
+        attachSlicerLiveCropBridge(id);
+      } else {
+        detachSlicerLiveCropBridge(id);
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(id);
+      viewport?.render?.();
+      toolbarService.refreshToolbarState({ viewportId: id });
+    },
+    toggleSlicerLiveVolumeCrop: ({ viewportId } = {}) => {
+      const id = viewportId || viewportGridService.getActiveViewportId();
+      if (!id || !getSlicerLiveVolume3D(id)) {
+        return;
+      }
+      const enabled = !(getSlicerLiveVolume3DCropEnabled(id) ?? false);
+      actions.setSlicerLiveVolumeCropEnabled({ viewportId: id, enabled });
+    },
     resetCrosshairs: ({ viewportId }) => {
       const crosshairInstances = [];
 
@@ -2668,6 +2872,54 @@ function commandsModule({
     },
     setFuberlinVolumePresentQuality: {
       commandFn: actions.setFuberlinVolumePresentQuality,
+    },
+    setMviewVolumeRenderMode: {
+      commandFn: actions.setMviewVolumeRenderMode,
+    },
+    setMviewVolumeProjection: {
+      commandFn: actions.setMviewVolumeProjection,
+    },
+    setMviewVolumeThreshold: {
+      commandFn: actions.setMviewVolumeThreshold,
+    },
+    setMviewVolumePresentQuality: {
+      commandFn: actions.setMviewVolumePresentQuality,
+    },
+    setSlicerLiveVolumeShade: {
+      commandFn: actions.setSlicerLiveVolumeShade,
+    },
+    setSlicerLiveVolumeLighting: {
+      commandFn: actions.setSlicerLiveVolumeLighting,
+    },
+    setSlicerLiveVolumeInteractionQuality: {
+      commandFn: actions.setSlicerLiveVolumeInteractionQuality,
+    },
+    setSlicerLiveVolumeTargetMs: {
+      commandFn: actions.setSlicerLiveVolumeTargetMs,
+    },
+    setSlicerLiveVolumeMotionBudget: {
+      commandFn: actions.setSlicerLiveVolumeMotionBudget,
+    },
+    setSlicerLiveVolumeSampleStep: {
+      commandFn: actions.setSlicerLiveVolumeSampleStep,
+    },
+    setSlicerLiveVolumeAccumulate: {
+      commandFn: actions.setSlicerLiveVolumeAccumulate,
+    },
+    setSlicerLiveVolumeSettleSamples: {
+      commandFn: actions.setSlicerLiveVolumeSettleSamples,
+    },
+    setSlicerLiveVolumeShadeCoeffs: {
+      commandFn: actions.setSlicerLiveVolumeShadeCoeffs,
+    },
+    setSlicerLiveVolumeClim: {
+      commandFn: actions.setSlicerLiveVolumeClim,
+    },
+    setSlicerLiveVolumeCropEnabled: {
+      commandFn: actions.setSlicerLiveVolumeCropEnabled,
+    },
+    toggleSlicerLiveVolumeCrop: {
+      commandFn: actions.toggleSlicerLiveVolumeCrop,
     },
     resetCrosshairs: {
       commandFn: actions.resetCrosshairs,

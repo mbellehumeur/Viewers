@@ -143,13 +143,15 @@ const VOLUME_3D_RENDER_MODES = new Set([
   'vtkVolume3d',
   'webgpuVolume3d',
   'fuberlinVolume3D',
+  'mviewVolume3d',
+  'slicerLiveVolume3d',
   'vtkGeometry3d',
 ]);
 
 /**
  * Optional Volume3D `renderMode` override from `?renderMode=<mode>` (exact wire
- * id, e.g. `fuberlinVolume3D`). Captured at init; when set, NextViewportBackend
- * uses it instead of deriving mode from `viewportRendering`.
+ * id, e.g. `mviewVolume3d` or `fuberlinVolume3D`). Captured at init; when set,
+ * NextViewportBackend uses it instead of deriving mode from `viewportRendering`.
  */
 let volume3DRenderModeOverride: string | undefined;
 

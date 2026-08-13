@@ -132,12 +132,25 @@ module.exports = (env, argv) => {
       // workspace source, so the dynamic import()s in pluginImports.js link
       // without the plugins being dependencies of platform/app. Merged with the
       // base aliases (webpack-merge deep-merges resolve.alias).
-      alias: writePluginImportFile.getPluginResolveAliases(),
+      alias: {
+        ...writePluginImportFile.getPluginResolveAliases(),
+        // FU Berlin Volume3D kernel (linked from @cornerstonejs/core).
+        '@mview/webgpu-volume-standalone': path.resolve(
+          __dirname,
+          '../../../../mview-webgpu-volume-lab/mview-webgpu-volume-core/src/index.js'
+        ),
+        '@slicerlive/webgpu-render': path.resolve(
+          __dirname,
+          '../../../../SlicerLive/render/dist/index.js'
+        ),
+      },
       modules: [
         // Preserve importer-relative node_modules walk-up for pnpm.
         'node_modules',
         path.resolve(__dirname, '../node_modules'),
         path.resolve(__dirname, '../../../node_modules'),
+        // Local cs3d + mview when core is junction-linked from outside Viewers.
+        path.resolve(__dirname, '../../../../cornerstone3D/node_modules'),
         SRC_DIR,
       ],
     },

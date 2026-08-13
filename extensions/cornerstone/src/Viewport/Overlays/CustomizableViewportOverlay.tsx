@@ -71,7 +71,7 @@ function CustomizableViewportOverlay({
     servicesManager.services;
   const [scale, setScale] = useState(1);
   const [annotationState, setAnnotationState] = useState(0);
-  /** Volume3D render mode (`webgpuVolume3d` / `fuberlinVolume3D` / …) for badges. */
+  /** Volume3D render mode (`webgpuVolume3d` / `mviewVolume3d` / `fuberlinVolume3D` / …) for badges. */
   const [activeRenderMode, setActiveRenderMode] = useState<string | undefined>();
   const { isViewportBackgroundLight: isLight, windowLevel: voi } = useViewportRendering(viewportId);
   const { imageIndex } = imageSliceData;

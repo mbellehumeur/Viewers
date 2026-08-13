@@ -3,6 +3,8 @@ import {
   CONSTANTS as csConstants,
   Types as CoreTypes,
   applyFuberlinVolume3DPreset,
+  applyMviewVolume3DPreset,
+  applySlicerLiveVolume3DPreset,
 } from '@cornerstonejs/core';
 import { getViewportAdapter } from '../adapter';
 import { legacyViewportOperations } from './LegacyViewportOperations';
@@ -144,13 +146,17 @@ export const nextViewportOperations: IViewportOperations = {
   setPreset(viewport: CoreTypes.IViewport, preset: string): void {
     // The native VolumeViewport3D has no setProperties; apply the volume-rendering
     // preset (RGBA transfer function) to the volume actor directly — or to the
-    // fuberlin mview present when that render mode is active.
+    // Specialized Volume3D (fuberlin / mview) present when that render mode is active.
     const presetObj = csConstants.VIEWPORT_PRESETS?.find(p => p.name === preset);
     if (!presetObj) {
       return;
     }
 
-    if (applyFuberlinVolume3DPreset(viewport.id, presetObj)) {
+    if (
+      applyMviewVolume3DPreset(viewport.id, presetObj) ||
+      applyFuberlinVolume3DPreset(viewport.id, presetObj) ||
+      applySlicerLiveVolume3DPreset(viewport.id, presetObj)
+    ) {
       return;
     }
 

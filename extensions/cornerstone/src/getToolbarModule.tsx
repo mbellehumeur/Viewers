@@ -1,6 +1,13 @@
 import { Enums } from '@cornerstonejs/tools';
+import {
+  Enums as csEnums,
+  getSlicerLiveVolume3D,
+  getSlicerLiveVolume3DCropEnabled,
+  SLICERLIVE_VOLUME_3D_RENDER_MODE,
+} from '@cornerstonejs/core';
 import i18n from '@ohif/i18n';
 import { getViewportAdapter, isVolumeRenderingViewport } from './services/ViewportService/adapter';
+import { getVolume3DRenderModeOverride } from './utils/nextViewports';
 import { utils } from '@ohif/ui-next';
 import { ViewportDataOverlayMenuWrapper } from './components/ViewportDataOverlaySettingMenu/ViewportDataOverlayMenuWrapper';
 import { ViewportOrientationMenuWrapper } from './components/ViewportOrientationMenu/ViewportOrientationMenuWrapper';
@@ -472,6 +479,48 @@ export default function getToolbarModule({ servicesManager, extensionManager }: 
       evaluate: () => {
         return {
           disabled: false,
+        };
+      },
+    },
+    {
+      name: 'evaluate.slicerLiveVolumeCrop',
+      evaluate: ({ viewportId, disabledText }) => {
+        const id = viewportId || viewportGridService.getActiveViewportId();
+        if (!id) {
+          return getDisabledState(disabledText);
+        }
+
+        // Prefer the live registry entry; also accept the mounted/requested
+        // render mode so the button enables as soon as the 3D pane is SlicerLive
+        // (toolbar can refresh before/without a registry hit on some mount paths).
+        if (getSlicerLiveVolume3D(id)) {
+          const enabled = getSlicerLiveVolume3DCropEnabled(id) ?? false;
+          return {
+            disabled: false,
+            className: utils.getToggledClassName(enabled),
+          };
+        }
+
+        const viewport = cornerstoneViewportService.getCornerstoneViewport(id) as
+          | { type?: string; getActiveRenderMode?: () => string }
+          | null
+          | undefined;
+        const renderMode = viewport?.getActiveRenderMode?.();
+        const isVolume3D =
+          viewport?.type === csEnums.ViewportType.VOLUME_3D_NEXT ||
+          viewport?.type === csEnums.ViewportType.VOLUME_3D;
+        const isSlicerLive =
+          renderMode === SLICERLIVE_VOLUME_3D_RENDER_MODE ||
+          (isVolume3D &&
+            getVolume3DRenderModeOverride() === SLICERLIVE_VOLUME_3D_RENDER_MODE);
+
+        if (!isSlicerLive) {
+          return getDisabledState(disabledText);
+        }
+
+        return {
+          disabled: false,
+          className: utils.getToggledClassName(false),
         };
       },
     },

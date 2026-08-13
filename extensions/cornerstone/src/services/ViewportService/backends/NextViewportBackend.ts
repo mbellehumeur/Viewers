@@ -6,6 +6,8 @@ import {
   CONSTANTS as csConstants,
   isRegisteredRenderBackend,
   applyFuberlinVolume3DPreset,
+  applyMviewVolume3DPreset,
+  applySlicerLiveVolume3DPreset,
 } from '@cornerstonejs/core';
 import type { RenderBackendValue } from '@cornerstonejs/core';
 import { utilities as csToolsUtils } from '@cornerstonejs/tools';
@@ -554,10 +556,16 @@ export class NextViewportBackend implements IViewportBackend {
       // 3D volume rendering needs an RGBA transfer function (preset) to be visible;
       // the bare native VolumeViewport3D has no setProperties, so apply the preset to
       // the volume actor directly (mirrors the legacy adapter's applyPresetToBinding).
-      // Fuberlin has no VTK actor — route through the mview preset bridge instead.
+      // Specialized Volume3D (fuberlin / mview) has no VTK actor — route through
+      // the mview preset bridge instead.
       if (is3D && index === 0 && props?.preset) {
         const preset = csConstants.VIEWPORT_PRESETS?.find(p => p.name === props.preset);
-        if (preset && applyFuberlinVolume3DPreset(nativeViewport.id, preset)) {
+        if (
+          preset &&
+          (applyMviewVolume3DPreset(nativeViewport.id, preset) ||
+            applyFuberlinVolume3DPreset(nativeViewport.id, preset) ||
+            applySlicerLiveVolume3DPreset(nativeViewport.id, preset))
+        ) {
           // applied (or stashed until scalars upload)
         } else if (preset) {
           const actor = nativeViewport.getDefaultActor?.()?.actor;

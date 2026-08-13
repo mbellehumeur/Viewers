@@ -13,3 +13,8 @@ export * from './FuberlinVolumeRenderMode';
 export * from './FuberlinVolumeProjection';
 export * from './FuberlinVolumePresentQuality';
 export * from './FuberlinVolumeThreshold';
+export * from './MviewVolumeRenderMode';
+export * from './MviewVolumeProjection';
+export * from './MviewVolumePresentQuality';
+export * from './MviewVolumeThreshold';
+export * from './SlicerLiveOptions';
