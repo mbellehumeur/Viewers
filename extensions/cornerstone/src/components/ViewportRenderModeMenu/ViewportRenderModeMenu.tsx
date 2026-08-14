@@ -11,10 +11,10 @@ import {
 const LEGACY_MODE = 'legacy';
 
 const RENDER_MODES: { value: string; label: string }[] = [
-  { value: 'slicerLiveVolume3d', label: 'slicerLive' },
-  { value: 'mviewVolume3d', label: 'mview' },
-  { value: 'vtkVolume3d', label: 'vtk' },
-  { value: LEGACY_MODE, label: 'legacy' },
+  { value: LEGACY_MODE, label: 'legacy (reload)' },
+  { value: 'vtkVolume3d', label: 'vtk (WebGL)' },
+  { value: 'mviewVolume3d', label: 'mview (WebGPU)' },
+  { value: 'slicerLiveVolume3d', label: 'slicerLive (WebGPU)' },
 ];
 
 const NEXT_PATH_MODES = new Set(
@@ -185,7 +185,7 @@ function ViewportRenderModeMenu({
               {...restProps}
               {...containerProps}
             >
-              <span className={cn(iconClassName, 'px-0.5 text-[10px] font-medium leading-none')}>
+              <span className={cn(iconClassName, 'px-0.5 text-xs font-medium leading-none')}>
                 {triggerLabel}
               </span>
             </IconContainer>
@@ -195,7 +195,7 @@ function ViewportRenderModeMenu({
               size="icon"
               disabled={disabled}
               onClick={() => {}}
-              className="h-6 min-w-6 px-1 text-[10px] font-medium"
+              className="h-7 min-w-7 px-1 text-xs font-medium"
             >
               {triggerLabel}
             </Button>
@@ -203,7 +203,7 @@ function ViewportRenderModeMenu({
         </div>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[140px] flex-shrink-0 flex-col items-start rounded p-1"
+        className="w-[170px] flex-shrink-0 flex-col items-start rounded p-1"
         align={align}
         side={side}
         style={{ left: 0 }}
@@ -212,13 +212,13 @@ function ViewportRenderModeMenu({
           <Button
             key={value}
             variant="ghost"
-            className="flex h-7 w-full flex-shrink-0 items-center justify-start self-stretch px-1 py-0"
+            className="flex h-8 w-full flex-shrink-0 items-center justify-start self-stretch px-1 py-0 text-sm"
             onClick={() => {
               void handleModeChange(value);
             }}
           >
             <div className="mr-1 flex w-6 items-center justify-start">
-              {currentMode === value ? <Icons.Checked className="text-primary h-6 w-6" /> : null}
+              {currentMode === value ? <Icons.Checked className="text-primary h-5 w-5" /> : null}
             </div>
             <div className="flex-1 text-left">{label}</div>
           </Button>

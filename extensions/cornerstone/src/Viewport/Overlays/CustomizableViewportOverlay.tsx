@@ -71,8 +71,6 @@ function CustomizableViewportOverlay({
     servicesManager.services;
   const [scale, setScale] = useState(1);
   const [annotationState, setAnnotationState] = useState(0);
-  /** Volume3D render mode (`webgpuVolume3d` / `mviewVolume3d` / `fuberlinVolume3D` / …) for badges. */
-  const [activeRenderMode, setActiveRenderMode] = useState<string | undefined>();
   const { isViewportBackgroundLight: isLight, windowLevel: voi } = useViewportRendering(viewportId);
   const { imageIndex } = imageSliceData;
 
@@ -158,32 +156,6 @@ function CustomizableViewportOverlay({
     };
   }, [viewportId, viewportData, cornerstoneViewportService, element]);
 
-  /**
-   * Volume3D next (webgpu / fuberlin) presents via binding-owned pipelines that
-   * do not go through zoom-only CAMERA_MODIFIED. Sync render-mode badges when
-   * IMAGE_RENDERED fires after mode activate / binding render.
-   */
-  useEffect(() => {
-    const syncActiveRenderMode = () => {
-      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
-
-      if (!viewport || typeof viewport.getActiveRenderMode !== 'function') {
-        setActiveRenderMode(undefined);
-        return;
-      }
-
-      const nextMode = viewport.getActiveRenderMode();
-      setActiveRenderMode(prev => (prev === nextMode ? prev : nextMode));
-    };
-
-    syncActiveRenderMode();
-    element.addEventListener(Enums.Events.IMAGE_RENDERED, syncActiveRenderMode);
-
-    return () => {
-      element.removeEventListener(Enums.Events.IMAGE_RENDERED, syncActiveRenderMode);
-    };
-  }, [viewportId, viewportData, cornerstoneViewportService, element]);
-
   const _renderOverlayItem = useCallback(
     (item, props) => {
       const overlayItemProps = {
@@ -235,7 +207,6 @@ function CustomizableViewportOverlay({
       displaySetProps,
       voi,
       scale,
-      activeRenderMode,
       instanceNumber,
       annotationState,
       isLight,
@@ -249,7 +220,6 @@ function CustomizableViewportOverlay({
         formatters: { formatDate: formatDICOMDate },
         voi,
         scale,
-        activeRenderMode,
         instanceNumber,
         viewportId,
         toolGroupService,

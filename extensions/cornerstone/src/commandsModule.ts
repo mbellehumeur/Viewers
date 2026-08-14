@@ -15,6 +15,8 @@ import {
   setMviewVolume3DProjection,
   setMviewVolume3DPresentQuality,
   setMviewVolume3DThreshold,
+  setMviewVolume3DTargetFps,
+  setMviewVolume3DTargetFpsEnabled,
   isMviewVolume3DRenderMode,
   isMviewVolume3DProjection,
   isMviewVolume3DPresentQuality,
@@ -1628,6 +1630,7 @@ function commandsModule({
             setDisplaySets?: (
               ...entries: Array<{ displaySetId: string; options?: Record<string, unknown> }>
             ) => Promise<void>;
+            render?: () => void;
           }
         | null
         | undefined;
@@ -1651,6 +1654,22 @@ function commandsModule({
           options: { renderMode: mode },
         }))
       );
+
+      // VTK has no default opacity TF; slicerLive/mview seed one internally but
+      // still accept the HP preset. Re-apply so remount matches first load.
+      const viewportInfo = cornerstoneViewportService.getViewportInfo(viewportId);
+      const displayPreset = viewportInfo?.getDisplaySetOptions?.()?.[0]?.displayPreset as
+        | string
+        | Record<string, string>
+        | undefined;
+      const displaySet = displaySetService.getDisplaySetByUID(displaySetUIDs[0]);
+      const modality = displaySet?.Modality;
+      const presetName =
+        typeof displayPreset === 'string'
+          ? displayPreset
+          : displayPreset?.[modality] || displayPreset?.default || 'CT-Bone';
+      ops.setPreset(viewport as Parameters<typeof ops.setPreset>[0], presetName);
+      viewport.render?.();
     },
     setMviewVolumeProjection: ({ viewportId, projection }) => {
       if (!viewportId || !isMviewVolume3DProjection(projection)) {
@@ -1678,6 +1697,26 @@ function commandsModule({
         return;
       }
       if (!setMviewVolume3DPresentQuality(viewportId, quality)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setMviewVolumeTargetFps: ({ viewportId, fps }) => {
+      if (!viewportId || !Number.isFinite(fps)) {
+        return;
+      }
+      if (!setMviewVolume3DTargetFps(viewportId, fps)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setMviewVolumeTargetFpsEnabled: ({ viewportId, enabled }) => {
+      if (!viewportId || typeof enabled !== 'boolean') {
+        return;
+      }
+      if (!setMviewVolume3DTargetFpsEnabled(viewportId, enabled)) {
         return;
       }
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
@@ -3002,6 +3041,12 @@ function commandsModule({
     },
     setMviewVolumePresentQuality: {
       commandFn: actions.setMviewVolumePresentQuality,
+    },
+    setMviewVolumeTargetFps: {
+      commandFn: actions.setMviewVolumeTargetFps,
+    },
+    setMviewVolumeTargetFpsEnabled: {
+      commandFn: actions.setMviewVolumeTargetFpsEnabled,
     },
     setSlicerLiveVolumeShade: {
       commandFn: actions.setSlicerLiveVolumeShade,

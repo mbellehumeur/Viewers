@@ -20,7 +20,6 @@ import { FuberlinVolumePresentQuality } from './FuberlinVolumePresentQuality';
 import { FuberlinVolumeThreshold } from './FuberlinVolumeThreshold';
 import { MviewVolumeRenderMode } from './MviewVolumeRenderMode';
 import { MviewVolumeProjection } from './MviewVolumeProjection';
-import { MviewVolumePresentQuality } from './MviewVolumePresentQuality';
 import { MviewVolumeThreshold } from './MviewVolumeThreshold';
 import { SlicerLiveVolumeShade } from './SlicerLiveVolumeShade';
 import { SlicerLiveVolumeLighting } from './SlicerLiveVolumeLighting';
@@ -80,10 +79,6 @@ export function VolumeRenderingOptions({ viewportId }: { viewportId?: string } =
             onModeChange={setMviewMode}
           />
           <MviewVolumeProjection viewportId={viewportId} />
-          <MviewVolumePresentQuality
-            viewportId={viewportId}
-            renderMode={mviewMode}
-          />
           <MviewVolumeThreshold
             viewportId={viewportId}
             renderMode={mviewMode}

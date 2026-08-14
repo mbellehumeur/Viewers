@@ -17,6 +17,7 @@ export * from './MviewVolumeRenderMode';
 export * from './MviewVolumeProjection';
 export * from './MviewVolumePresentQuality';
 export * from './MviewVolumeThreshold';
+export * from './MviewOptions';
 export * from './SlicerLiveOptions';
 export * from './SlicerLiveVolumeOpacity';
 export * from './SlicerLiveVolumeShade';

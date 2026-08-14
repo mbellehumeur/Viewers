@@ -148,7 +148,7 @@ export function buildViewerPath(entry: SegRouletteEntry): string {
     params.append('seriesInstanceUID', entry.su);
   }
   params.set('hangingProtocolId', 'only3D');
-  return `viewer/idc?${params.toString()}`;
+  return `/viewer/idc?${params.toString()}`;
 }
 
 export type SegRouletteAutoHydrateRequest = {
@@ -237,11 +237,21 @@ export function startSegRouletteAutoHydrate({
     }
 
     const { activeViewportId, viewports } = viewportGridService.getState();
-    if (!activeViewportId) {
+    if (!viewports?.size) {
       return;
     }
 
-    const viewport = viewports.get(activeViewportId);
+    const volume3dViewportId =
+      [...viewports.entries()].find(([, vp]) => {
+        const type = vp?.viewportOptions?.viewportType?.toLowerCase?.();
+        return type === 'volume3d' || type === 'volume3dnext';
+      })?.[0] ?? activeViewportId;
+
+    if (!volume3dViewportId) {
+      return;
+    }
+
+    const viewport = viewports.get(volume3dViewportId);
     const volumeUIDs = viewport?.displaySetInstanceUIDs || [];
     const hasVolume = volumeUIDs.some(uid => {
       const ds = displaySetService.getDisplaySetByUID(uid);
@@ -264,7 +274,7 @@ export function startSegRouletteAutoHydrate({
     }
 
     if (segDisplaySet.isHydrated) {
-      maybeAutoDimVolume(activeViewportId);
+      maybeAutoDimVolume(volume3dViewportId);
       clearSegRouletteAutoHydrate();
       return;
     }
@@ -273,9 +283,9 @@ export function startSegRouletteAutoHydrate({
     try {
       await commandsManager.runCommand('hydrateSecondaryDisplaySet', {
         displaySet: segDisplaySet,
-        viewportId: activeViewportId,
+        viewportId: volume3dViewportId,
       });
-      maybeAutoDimVolume(activeViewportId);
+      maybeAutoDimVolume(volume3dViewportId);
       clearSegRouletteAutoHydrate();
     } catch (error) {
       console.error('SegRoulette auto-hydrate failed', error);

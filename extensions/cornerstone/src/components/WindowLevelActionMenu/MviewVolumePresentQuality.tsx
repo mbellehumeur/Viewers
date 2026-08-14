@@ -93,7 +93,7 @@ export function MviewVolumePresentQuality({
     [commandsManager, viewportId]
   );
 
-  if (!isMview || !viewportId || mode !== 'composite') {
+  if (!isMview || !viewportId) {
     return null;
   }
 

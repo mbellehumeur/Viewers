@@ -11,11 +11,20 @@ jest.mock('./segmentationHandlers', () => ({
   setUpSelectedSegmentationsForViewportHandler: jest.fn(),
 }));
 
+jest.mock('./hydrateSlicerLiveSegOverlay', () => ({
+  isSlicerLiveVolumeViewport: jest.fn(() => false),
+}));
+
+jest.mock('./slicerLiveSegBridge', () => ({
+  syncSlicerLiveSegmentAppearance: jest.fn(),
+}));
+
 describe('setUpSegmentationEventHandlers', () => {
   const mockSegmentationService = {
     EVENTS: {
       SEGMENTATION_ADDED: 'SEGMENTATION_ADDED',
       SEGMENTATION_REMOVED: 'SEGMENTATION_REMOVED',
+      SEGMENTATION_REPRESENTATION_MODIFIED: 'SEGMENTATION_REPRESENTATION_MODIFIED',
     },
     subscribe: jest.fn(),
     getSegmentation: jest.fn(),
@@ -42,6 +51,7 @@ describe('setUpSegmentationEventHandlers', () => {
   const mockUnsubscribeModified = jest.fn();
   const mockUnsubscribeCreated = jest.fn();
   const mockUnsubscribeRemoved = jest.fn();
+  const mockUnsubscribeSlicerLiveAppearance = jest.fn();
   const mockUnsubscribeSelectedSegmentationsForViewportEvents = [jest.fn(), jest.fn()];
 
   const defaultParameters = {
@@ -67,6 +77,9 @@ describe('setUpSegmentationEventHandlers', () => {
       }
       if (eventName === mockSegmentationService.EVENTS.SEGMENTATION_REMOVED) {
         return { unsubscribe: mockUnsubscribeRemoved };
+      }
+      if (eventName === mockSegmentationService.EVENTS.SEGMENTATION_REPRESENTATION_MODIFIED) {
+        return { unsubscribe: mockUnsubscribeSlicerLiveAppearance };
       }
       return { unsubscribe: jest.fn() };
     });
@@ -108,6 +121,7 @@ describe('setUpSegmentationEventHandlers', () => {
         mockUnsubscribeModified,
         mockUnsubscribeCreated,
         mockUnsubscribeRemoved,
+        mockUnsubscribeSlicerLiveAppearance,
         ...mockUnsubscribeSelectedSegmentationsForViewportEvents,
       ],
     });

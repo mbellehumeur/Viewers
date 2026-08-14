@@ -5,6 +5,8 @@ import {
   setupSegmentationDataModifiedHandler,
   setupSegmentationModifiedHandler,
 } from './segmentationHandlers';
+import { isSlicerLiveVolumeViewport } from './hydrateSlicerLiveSegOverlay';
+import { syncSlicerLiveSegmentAppearance } from './slicerLiveSegBridge';
 
 export const setUpSegmentationEventHandlers = ({ servicesManager, commandsManager }) => {
   const { segmentationService, customizationService, displaySetService, viewportGridService } =
@@ -88,6 +90,24 @@ export const setUpSegmentationEventHandlers = ({ servicesManager, commandsManage
     }
   );
 
+  const { unsubscribe: unsubscribeSlicerLiveAppearance } = segmentationService.subscribe(
+    segmentationService.EVENTS.SEGMENTATION_REPRESENTATION_MODIFIED,
+    ({ segmentationId, viewportId }) => {
+      if (!segmentationId) {
+        return;
+      }
+      const viewportIds = viewportId
+        ? [viewportId]
+        : [...(viewportGridService.getState()?.viewports?.keys?.() ?? [])];
+      for (const id of viewportIds) {
+        if (!isSlicerLiveVolumeViewport(id)) {
+          continue;
+        }
+        syncSlicerLiveSegmentAppearance(id, segmentationId, segmentationService);
+      }
+    }
+  );
+
   const { unsubscribeSelectedSegmentationsForViewportEvents } =
     setUpSelectedSegmentationsForViewportHandler({
       segmentationService,
@@ -98,6 +118,7 @@ export const setUpSegmentationEventHandlers = ({ servicesManager, commandsManage
     unsubscribeSegmentationModifiedHandler,
     unsubscribeSegmentationCreated,
     unsubscribeSegmentationRemoved,
+    unsubscribeSlicerLiveAppearance,
     ...unsubscribeSelectedSegmentationsForViewportEvents,
   ];
 

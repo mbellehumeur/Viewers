@@ -5,6 +5,7 @@ import {
   finalizeSlicerLiveVolume3DSegmentation,
   getSlicerLiveVolume3D,
   metaData,
+  setSlicerLiveVolume3DSegmentAppearance,
   setSlicerLiveVolume3DSegmentation,
   updateSlicerLiveVolume3DSegmentationSlices,
 } from '@cornerstonejs/core';
@@ -56,6 +57,17 @@ type SegmentationServiceLike = {
     segmentationId: string,
     segmentIndex: number
   ) => number[] | undefined;
+  getSegmentationRepresentations?: (
+    viewportId: string,
+    specifier?: { segmentationId?: string; type?: unknown }
+  ) => Array<{
+    type?: string;
+    visible?: boolean;
+    segments?: Record<
+      string | number,
+      { visible?: boolean; segmentIndex?: number }
+    >;
+  }>;
 };
 
 type LabelmapBundle = {
@@ -105,6 +117,179 @@ function toUint8Labelmap(scalars: ArrayLike<number>, length: number): Uint8Array
     lab[i] = Math.max(0, Math.min(255, Math.round(v)));
   }
   return lab;
+}
+
+function getSopInstanceUID(imageId: string | undefined): string | undefined {
+  if (!imageId) {
+    return undefined;
+  }
+  const sopCommon = metaData.get('sopCommonModule', imageId) as
+    | { sopInstanceUID?: string }
+    | undefined;
+  if (sopCommon?.sopInstanceUID) {
+    return sopCommon.sopInstanceUID;
+  }
+  const generalImage = metaData.get('generalImageModule', imageId) as
+    | { sopInstanceUID?: string }
+    | undefined;
+  if (generalImage?.sopInstanceUID) {
+    return generalImage.sopInstanceUID;
+  }
+  const instance = metaData.get('instance', imageId) as
+    | { SOPInstanceUID?: string; SopInstanceUID?: string }
+    | undefined;
+  return instance?.SOPInstanceUID ?? instance?.SopInstanceUID;
+}
+
+type CachedVolumeLike = {
+  dimensions?: number[];
+  spacing?: number[];
+  origin?: number[];
+  direction?: number[] | Float32Array;
+  imageIds?: string[];
+};
+
+function findMatchingVolume(
+  dims: [number, number, number],
+  referencedImageIds: string[]
+): CachedVolumeLike | undefined {
+  const volumes = cache.getVolumes?.() ?? [];
+  const firstRef = referencedImageIds[0];
+  return volumes.find(v => {
+    if (!v?.dimensions || !v?.spacing) {
+      return false;
+    }
+    const sameGrid =
+      v.dimensions[0] === dims[0] &&
+      v.dimensions[1] === dims[1] &&
+      v.dimensions[2] === dims[2];
+    if (!sameGrid) {
+      return Boolean(firstRef && v.imageIds?.includes?.(firstRef));
+    }
+    return true;
+  });
+}
+
+/**
+ * Build srcSlice -> destSlice so packed SEG frames land on the same k as the
+ * matching CT volume.imageIds. Identity when orders already match.
+ */
+function sliceIndexMapToVolume(
+  sourceImageIds: Array<string | undefined>,
+  volumeImageIds: string[] | undefined,
+  depth: number
+): number[] | undefined {
+  if (!volumeImageIds?.length || volumeImageIds.length !== depth) {
+    return undefined;
+  }
+
+  const byId = new Map<string, number>();
+  const bySop = new Map<string, number>();
+  for (let i = 0; i < volumeImageIds.length; i++) {
+    const id = volumeImageIds[i];
+    byId.set(id, i);
+    const sop = getSopInstanceUID(id);
+    if (sop) {
+      bySop.set(sop, i);
+    }
+  }
+
+  const srcToDst = new Array<number>(depth).fill(-1);
+  let mapped = 0;
+  for (let src = 0; src < depth; src++) {
+    const refId = sourceImageIds[src];
+    if (!refId) {
+      continue;
+    }
+    let dst = byId.get(refId);
+    if (dst === undefined) {
+      const sop = getSopInstanceUID(refId);
+      dst = sop ? bySop.get(sop) : undefined;
+    }
+    if (dst === undefined) {
+      dst = volumeImageIds.findIndex(
+        id => id === refId || id.includes(refId) || refId.includes(id)
+      );
+      if (dst < 0) {
+        continue;
+      }
+    }
+    if (dst >= 0 && dst < depth) {
+      srcToDst[src] = dst;
+      mapped += 1;
+    }
+  }
+
+  if (mapped < 2) {
+    return undefined;
+  }
+
+  let identity = true;
+  for (let src = 0; src < depth; src++) {
+    const dst = srcToDst[src];
+    if (dst >= 0 && dst !== src) {
+      identity = false;
+      break;
+    }
+  }
+  if (identity) {
+    return undefined;
+  }
+
+  return srcToDst;
+}
+
+function permuteLabelmapSlices(
+  lab: Uint8Array,
+  dims: [number, number, number],
+  srcToDst: number[]
+): Uint8Array {
+  const sliceLen = dims[0] * dims[1];
+  const depth = dims[2];
+  const out = new Uint8Array(lab.length);
+  for (let src = 0; src < depth; src++) {
+    const dst = srcToDst[src];
+    if (dst < 0 || dst >= depth) {
+      continue;
+    }
+    out.set(lab.subarray(src * sliceLen, (src + 1) * sliceLen), dst * sliceLen);
+  }
+  return out;
+}
+
+function remapLoadedSliceIndices(indices: number[], srcToDst: number[]): number[] {
+  const remapped: number[] = [];
+  for (const src of indices) {
+    const dst = srcToDst[src];
+    if (dst !== undefined && dst >= 0) {
+      remapped.push(dst);
+    }
+  }
+  return remapped;
+}
+
+function alignLabelmapWithVolume(
+  lab: Uint8Array,
+  dims: [number, number, number],
+  referencedImageIds: string[],
+  volume?: CachedVolumeLike
+): { lab: Uint8Array; sliceIndexMap?: number[] } {
+  const match = volume ?? findMatchingVolume(dims, referencedImageIds);
+  if (
+    !match?.imageIds?.length ||
+    match.dimensions?.[0] !== dims[0] ||
+    match.dimensions?.[1] !== dims[1] ||
+    match.dimensions?.[2] !== dims[2]
+  ) {
+    return { lab };
+  }
+
+  const srcToDst = sliceIndexMapToVolume(referencedImageIds, match.imageIds, dims[2]);
+  if (!srcToDst) {
+    return { lab };
+  }
+
+  return { lab: permuteLabelmapSlices(lab, dims, srcToDst), sliceIndexMap: srcToDst };
 }
 
 function rgbaToUnitRgb(color: number[] | undefined): [number, number, number] | null {
@@ -247,22 +432,16 @@ function labelmapFromStackImages(
       .map(image => (image as { referencedImageId?: string }).referencedImageId)
       .filter((id): id is string => Boolean(id));
 
-  const volumes = cache.getVolumes?.() ?? [];
-  const volume = volumes.find(v => {
-    if (!v?.dimensions || !v?.spacing) {
-      return false;
-    }
-    const sameGrid =
-      v.dimensions[0] === cols &&
-      v.dimensions[1] === rows &&
-      v.dimensions[2] === images.length;
-    if (sameGrid) {
-      return true;
-    }
-    return Boolean(
-      referencedImageIds[0] && v.imageIds?.includes?.(referencedImageIds[0])
-    );
-  });
+  const sourceIds =
+    referencedImageIds.length === images.length
+      ? referencedImageIds
+      : images.map(
+          (image, i) =>
+            (image as { referencedImageId?: string }).referencedImageId ??
+            referencedImageIds[i]
+        );
+
+  const volume = findMatchingVolume(dims, referencedImageIds);
 
   if (
     volume?.dimensions &&
@@ -271,8 +450,9 @@ function labelmapFromStackImages(
     volume.dimensions[2] === images.length &&
     volume.spacing
   ) {
+    const aligned = alignLabelmapWithVolume(lab, dims, sourceIds, volume);
     return {
-      lab,
+      lab: aligned.lab,
       dimensions: dims,
       ijkToWorld: buildIjkToWorld(
         (volume.origin ?? [0, 0, 0]) as [number, number, number],
@@ -350,6 +530,80 @@ function labelmapFromStackImages(
   };
 }
 
+function segmentIsVisibleOnViewport(
+  segmentationService: SegmentationServiceLike,
+  viewportId: string,
+  segmentationId: string,
+  segmentIndex: number
+): boolean {
+  const reps = segmentationService.getSegmentationRepresentations?.(viewportId, {
+    segmentationId,
+  });
+  if (!reps?.length) {
+    return true;
+  }
+  const rep =
+    reps.find(r => r.type === 'Labelmap') ?? reps[0];
+  if (rep.visible === false) {
+    return false;
+  }
+  const segment =
+    rep.segments?.[segmentIndex] ?? rep.segments?.[String(segmentIndex)];
+  return segment?.visible !== false;
+}
+
+/**
+ * Push CS3D per-segment colour + visibility onto a mounted SlicerLive overlay.
+ * No-op when SlicerLive is not mounted or has no SDF yet.
+ */
+export function syncSlicerLiveSegmentAppearance(
+  viewportId: string,
+  segmentationId: string,
+  segmentationService: SegmentationServiceLike
+): boolean {
+  if (!getSlicerLiveVolume3D(viewportId)) {
+    return false;
+  }
+
+  const segmentation = segmentationService.getSegmentation(segmentationId);
+  const segments = segmentation?.segments ?? {};
+  const appearances: Array<{
+    num: number;
+    color: [number, number, number];
+    opacity: number;
+  }> = [];
+
+  for (const key of Object.keys(segments)) {
+    const segment = segments[key];
+    const segmentIndex = Number(segment?.segmentIndex ?? key);
+    if (!Number.isFinite(segmentIndex) || segmentIndex < 1) {
+      continue;
+    }
+    const rgba = segmentationService.getSegmentColor(
+      viewportId,
+      segmentationId,
+      segmentIndex
+    );
+    const rgb = rgbaToUnitRgb(rgba) ?? defaultSegmentColor(segmentIndex);
+    const visible = segmentIsVisibleOnViewport(
+      segmentationService,
+      viewportId,
+      segmentationId,
+      segmentIndex
+    );
+    appearances.push({
+      num: segmentIndex,
+      color: rgb,
+      opacity: visible ? 1 : 0,
+    });
+  }
+
+  if (appearances.length === 0) {
+    return false;
+  }
+  return setSlicerLiveVolume3DSegmentAppearance(viewportId, appearances);
+}
+
 /**
  * Push a hydrated OHIF SEG labelmap into the SlicerLive SDF SegmentField for
  * a volume3d slicerLive viewport. No-op when SlicerLive is not mounted.
@@ -366,8 +620,8 @@ export async function applySlicerLiveSegmentationFromOHIF(
   const segmentation = segmentationService.getSegmentation(segmentationId);
   const fromVolume = segmentationService.getLabelmapVolume(segmentationId);
   const bundle =
-    (fromVolume ? labelmapFromVolume(fromVolume) : null) ??
-    (segmentation ? labelmapFromStackImages(segmentation) : null);
+    (segmentation ? labelmapFromStackImages(segmentation) : null) ??
+    (fromVolume ? labelmapFromVolume(fromVolume) : null);
 
   if (!bundle) {
     console.warn(
@@ -405,13 +659,17 @@ export async function applySlicerLiveSegmentationFromOHIF(
     return false;
   }
 
-  return setSlicerLiveVolume3DSegmentation(viewportId, {
+  const applied = await setSlicerLiveVolume3DSegmentation(viewportId, {
     lab: bundle.lab,
     dimensions: bundle.dimensions,
     ijkToWorld: bundle.ijkToWorld,
     colors,
     names,
   });
+  if (applied) {
+    syncSlicerLiveSegmentAppearance(viewportId, segmentationId, segmentationService);
+  }
+  return applied;
 }
 
 /** Clear SlicerLive segmentation for a viewport (no-op if not mounted). */
@@ -491,7 +749,7 @@ export function materializeSegLabelmapProgressive(
   const depth = group.length;
   const sliceLen = cols * rows;
   const lab = new Uint8Array(sliceLen * depth);
-  const loadedSliceIndices: number[] = [];
+  const rawLoadedSliceIndices: number[] = [];
 
   for (let z = 0; z < depth; z++) {
     const image = group[z];
@@ -512,11 +770,11 @@ export function materializeSegLabelmapProgressive(
       any = true;
     }
     if (any) {
-      loadedSliceIndices.push(z);
+      rawLoadedSliceIndices.push(z);
     }
   }
 
-  if (loadedSliceIndices.length === 0 && !group.some(img => img)) {
+  if (rawLoadedSliceIndices.length === 0 && !group.some(img => img)) {
     return undefined;
   }
 
@@ -526,33 +784,38 @@ export function materializeSegLabelmapProgressive(
       .map(img => img.referencedImageId)
       .filter((id): id is string => Boolean(id));
 
-  const dims: [number, number, number] = [cols, rows, depth];
-  const ijkToWorld = resolveGeometryIjkToWorld(dims, referencedImageIds, group);
+  const sourceIds = group.map(
+    (img, i) => img?.referencedImageId ?? referencedImageIds[i]
+  );
 
-  return { lab, dimensions: dims, ijkToWorld, loadedSliceIndices };
+  const dims: [number, number, number] = [cols, rows, depth];
+  const volume = findMatchingVolume(dims, referencedImageIds);
+  const aligned = alignLabelmapWithVolume(lab, dims, sourceIds, volume);
+  const loadedSliceIndices = aligned.sliceIndexMap
+    ? remapLoadedSliceIndices(rawLoadedSliceIndices, aligned.sliceIndexMap)
+    : rawLoadedSliceIndices;
+  const ijkToWorld = resolveGeometryIjkToWorld(dims, referencedImageIds, group, volume);
+
+  return {
+    lab: aligned.lab,
+    dimensions: dims,
+    ijkToWorld,
+    loadedSliceIndices,
+  };
 }
 
 function resolveGeometryIjkToWorld(
   dims: [number, number, number],
   referencedImageIds: string[],
-  group: LabelmapImageLike[]
+  group: LabelmapImageLike[],
+  volume?: CachedVolumeLike
 ): number[] {
-  const volumes = cache.getVolumes?.() ?? [];
-  const volume = volumes.find(v => {
-    if (!v?.dimensions || !v?.spacing) {
-      return false;
-    }
-    return (
-      v.dimensions[0] === dims[0] &&
-      v.dimensions[1] === dims[1] &&
-      v.dimensions[2] === dims[2]
-    );
-  });
-  if (volume?.spacing) {
+  const matched = volume ?? findMatchingVolume(dims, referencedImageIds);
+  if (matched?.spacing) {
     return buildIjkToWorld(
-      (volume.origin ?? [0, 0, 0]) as [number, number, number],
-      volume.spacing as [number, number, number],
-      volume.direction
+      (matched.origin ?? [0, 0, 0]) as [number, number, number],
+      matched.spacing as [number, number, number],
+      matched.direction
     );
   }
 
@@ -731,6 +994,13 @@ export async function applySlicerLiveSegmentationProgressive(params: {
     });
     if (!begun) {
       return false;
+    }
+    if (segmentationService) {
+      syncSlicerLiveSegmentAppearance(
+        viewportId,
+        segmentationId,
+        segmentationService
+      );
     }
     session = {
       begun: true,
