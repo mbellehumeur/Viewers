@@ -907,7 +907,9 @@ export const segmentationModeToolbarSections: Record<string, string[]> = {
     'MoreTools',
   ],
 
-  [TOOLBAR_SECTIONS.viewportActionMenu.topLeft]: ['orientationMenu', 'dataOverlayMenu'],
+  [TOOLBAR_SECTIONS.right]: ['SegRoulette'],
+
+  [TOOLBAR_SECTIONS.viewportActionMenu.topLeft]: ['dataOverlayMenu', 'renderModeMenu'],
 
   [TOOLBAR_SECTIONS.viewportActionMenu.bottomMiddle]: ['AdvancedRenderingControls'],
 
@@ -926,6 +928,8 @@ export const segmentationModeToolbarSections: Record<string, string[]> = {
   ],
 
   [TOOLBAR_SECTIONS.viewportActionMenu.bottomLeft]: ['windowLevelMenu'],
+
+  [TOOLBAR_SECTIONS.viewportActionMenu.bottomRight]: ['orientationMenu'],
 
   MoreTools: [
     'Reset',

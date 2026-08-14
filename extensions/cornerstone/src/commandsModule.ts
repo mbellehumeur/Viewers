@@ -28,6 +28,7 @@ import {
   setSlicerLiveVolume3DSettleSamples,
   setSlicerLiveVolume3DShadeCoeffs,
   setSlicerLiveVolume3DClim,
+  setSlicerLiveVolume3DVolumeOpacity,
   getSlicerLiveVolume3D,
   getSlicerLiveVolume3DCropEnabled,
   setSlicerLiveVolume3DCropEnabled,
@@ -92,10 +93,29 @@ import {
 } from './utils/slicerLiveCropBridge';
 import {
   hydrateSlicerLiveSegmentationOverlay,
+  markSlicerLiveVolumeViewport,
   shouldUseSlicerLiveSegHydration,
 } from './utils/hydrateSlicerLiveSegOverlay';
+import { setVolume3DRenderModeOverride } from './utils/nextViewports';
 import { utilities as segmentationUtilities } from '@cornerstonejs/tools/segmentation';
 import i18n from '@ohif/i18n';
+
+/** Volume3D path wire ids exposed by the viewport render-mode corner menu. */
+const VOLUME_3D_PATH_RENDER_MODES = new Set([
+  'slicerLiveVolume3d',
+  'mviewVolume3d',
+  'vtkVolume3d',
+]);
+
+function syncVolume3DRenderModeUrlParam(mode: string): void {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set('renderMode', mode);
+    window.history.replaceState(window.history.state, '', url.toString());
+  } catch {
+    // SSR / non-browser
+  }
+}
 
 const { add, intersect, subtract, copy } = cstUtils.contourSegmentation;
 
@@ -1593,6 +1613,45 @@ function commandsModule({
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
       viewport?.render?.();
     },
+    /**
+     * Switch Volume3D render path (slicerLive / mview / vtk) by updating the
+     * global override and remounting the viewport display sets.
+     */
+    setVolume3DRenderMode: async ({ viewportId, mode }) => {
+      if (!viewportId || typeof mode !== 'string' || !VOLUME_3D_PATH_RENDER_MODES.has(mode)) {
+        return;
+      }
+
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId) as
+        | {
+            getActiveRenderMode?: () => string;
+            setDisplaySets?: (
+              ...entries: Array<{ displaySetId: string; options?: Record<string, unknown> }>
+            ) => Promise<void>;
+          }
+        | null
+        | undefined;
+
+      if (!viewport?.setDisplaySets || typeof viewport.getActiveRenderMode !== 'function') {
+        return;
+      }
+
+      const displaySetUIDs = viewportGridService.getDisplaySetsUIDsForViewport(viewportId) ?? [];
+      if (!displaySetUIDs.length) {
+        return;
+      }
+
+      setVolume3DRenderModeOverride(mode);
+      syncVolume3DRenderModeUrlParam(mode);
+      markSlicerLiveVolumeViewport(viewportId, mode === 'slicerLiveVolume3d');
+
+      await viewport.setDisplaySets(
+        ...displaySetUIDs.map(displaySetId => ({
+          displaySetId,
+          options: { renderMode: mode },
+        }))
+      );
+    },
     setMviewVolumeProjection: ({ viewportId, projection }) => {
       if (!viewportId || !isMviewVolume3DProjection(projection)) {
         return;
@@ -1629,6 +1688,16 @@ function commandsModule({
         return;
       }
       if (!setSlicerLiveVolume3DShade(viewportId, shade)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
+    setSlicerLiveVolumeOpacity: ({ viewportId, opacity }) => {
+      if (!viewportId || !Number.isFinite(opacity)) {
+        return;
+      }
+      if (!setSlicerLiveVolume3DVolumeOpacity(viewportId, opacity)) {
         return;
       }
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
@@ -2922,6 +2991,9 @@ function commandsModule({
     setMviewVolumeRenderMode: {
       commandFn: actions.setMviewVolumeRenderMode,
     },
+    setVolume3DRenderMode: {
+      commandFn: actions.setVolume3DRenderMode,
+    },
     setMviewVolumeProjection: {
       commandFn: actions.setMviewVolumeProjection,
     },
@@ -2933,6 +3005,9 @@ function commandsModule({
     },
     setSlicerLiveVolumeShade: {
       commandFn: actions.setSlicerLiveVolumeShade,
+    },
+    setSlicerLiveVolumeOpacity: {
+      commandFn: actions.setSlicerLiveVolumeOpacity,
     },
     setSlicerLiveVolumeLighting: {
       commandFn: actions.setSlicerLiveVolumeLighting,

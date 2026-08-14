@@ -29,6 +29,7 @@ import { useViewportsByPositionStore } from './stores/useViewportsByPositionStor
 import { useToggleOneUpViewportGridStore } from './stores/useToggleOneUpViewportGridStore';
 import requestDisplaySetCreationForStudy from './Panels/requestDisplaySetCreationForStudy';
 import promptSaveReport from './utils/promptSaveReport';
+import { buildViewerPath, loadManifest, pickRandom, setSegRouletteAutoHydrate } from './utils/segRoulette';
 
 export type HangingProtocolParams = {
   protocolId?: string;
@@ -661,6 +662,43 @@ const commandsModule = ({
       history.navigate(historyArgs.to, historyArgs.options);
     },
 
+    /**
+     * Spin a random IDC SEG case (SegRoulette / Segmentation rendering testing).
+     * Optional `collection` scopes the pick to one IDC collection id.
+     */
+    segRoulette: async ({ collection }: { collection?: string } = {}) => {
+      try {
+        const { rows } = await loadManifest();
+        const entry = pickRandom(
+          rows,
+          collection ? e => e.col === collection : undefined
+        );
+        if (!entry?.st) {
+          throw new Error('SegRoulette: picked entry is missing StudyInstanceUID');
+        }
+
+        // Ensure only3D on navigate (via hangingProtocolId), then auto-hydrate
+        // SEG once the volume viewport is ready (see startSegRouletteAutoHydrate).
+        if (entry.su) {
+          setSegRouletteAutoHydrate({
+            studyInstanceUID: entry.st,
+            segSeriesInstanceUID: entry.su,
+          });
+        }
+
+        history.navigate(buildViewerPath(entry));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(message);
+        uiNotificationService?.show({
+          title: 'Segmentation rendering testing',
+          message,
+          type: 'error',
+          duration: 5000,
+        });
+      }
+    },
+
     openDICOMTagViewer({ displaySetInstanceUID }: { displaySetInstanceUID?: string }) {
       const { activeViewportId, viewports } = viewportGridService.getState();
       const activeViewportSpecificData = viewports.get(activeViewportId);
@@ -891,6 +929,7 @@ const commandsModule = ({
     setHangingProtocol: actions.setHangingProtocol,
     toggleHangingProtocol: actions.toggleHangingProtocol,
     navigateHistory: actions.navigateHistory,
+    segRoulette: actions.segRoulette,
     nextStage: {
       commandFn: actions.deltaStage,
       options: { direction: 1 },

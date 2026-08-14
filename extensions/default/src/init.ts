@@ -5,6 +5,7 @@ import { ActiveThemeProvider } from '@ohif/ui-next';
 import getPTImageIdInstanceMetadata from './getPTImageIdInstanceMetadata';
 import { registerHangingProtocolAttributes } from './hangingprotocols';
 import { HotkeysManager } from '@ohif/core';
+import { startSegRouletteAutoHydrate } from './utils/segRoulette';
 
 const metadataProvider = classes.MetadataProvider;
 
@@ -48,6 +49,9 @@ export default function init({
 
   // Adds extra custom attributes for use by hanging protocols
   registerHangingProtocolAttributes({ servicesManager });
+
+  // SegRoulette: after spin navigation, hydrate SEG once only3D volume is ready.
+  startSegRouletteAutoHydrate({ servicesManager, commandsManager });
 
   // Function to process and subscribe to events for a given set of commands and listeners
   const eventSubscriptions = [];

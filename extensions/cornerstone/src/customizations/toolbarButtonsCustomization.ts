@@ -3,6 +3,10 @@ import type { Button } from '@ohif/core/types';
 import { EVENTS } from '@cornerstonejs/core';
 import { ViewportGridService, ToolbarService } from '@ohif/core';
 import i18n from 'i18next';
+import {
+  SEGROULETTE_COLLECTIONS,
+  collectionButtonId,
+} from '../utils/segRouletteCollections';
 
 const { TOOLBAR_SECTIONS } = ToolbarService;
 
@@ -33,6 +37,13 @@ const toolbarButtons: Button[] = [
   },
   {
     id: 'MoreTools',
+    uiType: 'ohif.toolButtonList',
+    props: {
+      buttonSection: true,
+    },
+  },
+  {
+    id: 'SegRoulette',
     uiType: 'ohif.toolButtonList',
     props: {
       buttonSection: true,
@@ -109,6 +120,18 @@ const toolbarButtons: Button[] = [
       evaluate: {
         name: 'evaluate.orientationMenu',
         // hideWhenDisabled: true,
+      },
+    },
+  },
+  {
+    id: 'renderModeMenu',
+    uiType: 'ohif.renderModeMenu',
+    props: {
+      label: i18n.t('Buttons:Render Mode'),
+      tooltip: i18n.t('Buttons:Switch Volume3D render path'),
+      evaluate: {
+        name: 'evaluate.renderModeMenu',
+        hideWhenDisabled: true,
       },
     },
   },
@@ -632,6 +655,33 @@ const toolbarButtons: Button[] = [
     },
   },
   {
+    id: 'SegRouletteSpin',
+    uiType: 'ohif.toolButton',
+    props: {
+      icon: 'tool-stack-scroll',
+      label: 'Segmentation rendering testing',
+      tooltip: 'Spin a random IDC SEG case (any collection)',
+      commands: 'segRoulette',
+      evaluate: 'evaluate.action',
+    },
+  },
+  ...SEGROULETTE_COLLECTIONS.map(
+    (collection): Button => ({
+      id: collectionButtonId(collection),
+      uiType: 'ohif.toolButton',
+      props: {
+        icon: 'tool-stack-scroll',
+        label: collection,
+        tooltip: `Spin a random SEG case from ${collection}`,
+        commands: {
+          commandName: 'segRoulette',
+          commandOptions: { collection },
+        },
+        evaluate: 'evaluate.action',
+      },
+    })
+  ),
+  {
     id: 'Capture',
     uiType: 'ohif.toolButton',
     props: {
@@ -743,7 +793,9 @@ export const toolbarSections = {
     'MoreTools',
   ],
 
-  [TOOLBAR_SECTIONS.viewportActionMenu.topLeft]: ['orientationMenu', 'dataOverlayMenu'],
+  [TOOLBAR_SECTIONS.right]: ['SegRoulette'],
+
+  [TOOLBAR_SECTIONS.viewportActionMenu.topLeft]: ['dataOverlayMenu', 'renderModeMenu'],
 
   [TOOLBAR_SECTIONS.viewportActionMenu.bottomMiddle]: ['AdvancedRenderingControls'],
 
@@ -762,6 +814,8 @@ export const toolbarSections = {
   ],
 
   [TOOLBAR_SECTIONS.viewportActionMenu.bottomLeft]: ['windowLevelMenu'],
+
+  [TOOLBAR_SECTIONS.viewportActionMenu.bottomRight]: ['orientationMenu'],
 
   MeasurementTools: [
     'Length',
@@ -796,6 +850,10 @@ export const toolbarSections = {
     'WindowLevelRegion',
     'SegmentLabelTool',
   ],
+
+  // Spin + one item per IDC collection (all registered statically so
+  // ToolbarService.handleEvaluateNested never sees missing button ids).
+  SegRoulette: ['SegRouletteSpin', ...SEGROULETTE_COLLECTIONS.map(collectionButtonId)],
 };
 
 /**

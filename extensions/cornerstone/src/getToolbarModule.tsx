@@ -7,10 +7,11 @@ import {
 } from '@cornerstonejs/core';
 import i18n from '@ohif/i18n';
 import { getViewportAdapter, isVolumeRenderingViewport } from './services/ViewportService/adapter';
-import { getVolume3DRenderModeOverride } from './utils/nextViewports';
+import { getVolume3DRenderModeOverride, isNextViewportsEnabled } from './utils/nextViewports';
 import { utils } from '@ohif/ui-next';
 import { ViewportDataOverlayMenuWrapper } from './components/ViewportDataOverlaySettingMenu/ViewportDataOverlayMenuWrapper';
 import { ViewportOrientationMenuWrapper } from './components/ViewportOrientationMenu/ViewportOrientationMenuWrapper';
+import { ViewportRenderModeMenuWrapper } from './components/ViewportRenderModeMenu/ViewportRenderModeMenuWrapper';
 import { WindowLevelActionMenuWrapper } from './components/WindowLevelActionMenu/WindowLevelActionMenuWrapper';
 import { VOIManualControlMenuWrapper } from './components/VOIManualControlMenu';
 import { ThresholdMenuWrapper } from './components/ThresholdMenu/ThresholdMenuWrapper';
@@ -230,6 +231,41 @@ export default function getToolbarModule({ servicesManager, extensionManager }: 
 
         return {
           disabled,
+        };
+      },
+    },
+    {
+      name: 'ohif.renderModeMenu',
+      defaultComponent: ViewportRenderModeMenuWrapper,
+    },
+    {
+      name: 'evaluate.renderModeMenu',
+      evaluate: ({ viewportId }) => {
+        const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId) as
+          | { type?: string; getActiveRenderMode?: () => string }
+          | null
+          | undefined;
+
+        if (!viewport) {
+          return {
+            disabled: true,
+          };
+        }
+
+        // Next Volume3D exposes getActiveRenderMode; legacy Volume3D does not,
+        // but the menu still offers Legacy ↔ next reload switching.
+        const isNextVolume3D = typeof viewport.getActiveRenderMode === 'function';
+        const isLegacyVolume3D =
+          !isNextViewportsEnabled() && viewport.type === csEnums.ViewportType.VOLUME_3D;
+
+        if (!isNextVolume3D && !isLegacyVolume3D) {
+          return {
+            disabled: true,
+          };
+        }
+
+        return {
+          disabled: false,
         };
       },
     },

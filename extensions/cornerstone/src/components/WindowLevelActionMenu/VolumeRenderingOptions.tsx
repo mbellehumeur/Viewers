@@ -24,6 +24,7 @@ import { MviewVolumePresentQuality } from './MviewVolumePresentQuality';
 import { MviewVolumeThreshold } from './MviewVolumeThreshold';
 import { SlicerLiveVolumeShade } from './SlicerLiveVolumeShade';
 import { SlicerLiveVolumeLighting } from './SlicerLiveVolumeLighting';
+import { SlicerLiveVolumeOpacity } from './SlicerLiveVolumeOpacity';
 import { useViewportRendering } from '../../hooks/useViewportRendering';
 import { useTranslation } from 'react-i18next';
 
@@ -53,6 +54,11 @@ export function VolumeRenderingOptions({ viewportId }: { viewportId?: string } =
     <AllInOneMenu.ItemPanel>
       {isSlicerLive && (
         <>
+          <div className="mt-2 flex h-8 !h-[20px] w-full flex-shrink-0 items-center justify-start px-2 text-base">
+            <div className="text-muted-foreground text-sm">{t('Volume')}</div>
+          </div>
+          <div className="bg-background mt-1 mb-1 h-px w-full"></div>
+          <SlicerLiveVolumeOpacity viewportId={viewportId} />
           <div className="mt-2 flex h-8 !h-[20px] w-full flex-shrink-0 items-center justify-start px-2 text-base">
             <div className="text-muted-foreground text-sm">{t('Lighting')}</div>
           </div>
