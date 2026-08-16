@@ -98,7 +98,8 @@ import {
   markSlicerLiveVolumeViewport,
   shouldUseSlicerLiveSegHydration,
 } from './utils/hydrateSlicerLiveSegOverlay';
-import { setVolume3DRenderModeOverride } from './utils/nextViewports';
+import { setVolume3DRenderModeOverride, setNextViewportsEnabled, syncUseNextViewportsUrlParam, toOhifViewportType } from './utils/nextViewports';
+import { getViewportPresentations } from './utils/presentations/getViewportPresentations';
 import { utilities as segmentationUtilities } from '@cornerstonejs/tools/segmentation';
 import i18n from '@ohif/i18n';
 
@@ -109,10 +110,14 @@ const VOLUME_3D_PATH_RENDER_MODES = new Set([
   'vtkVolume3d',
 ]);
 
-function syncVolume3DRenderModeUrlParam(mode: string): void {
+function syncVolume3DRenderModeUrlParam(mode: string | undefined): void {
   try {
     const url = new URL(window.location.href);
-    url.searchParams.set('renderMode', mode);
+    if (mode) {
+      url.searchParams.set('renderMode', mode);
+    } else {
+      url.searchParams.delete('renderMode');
+    }
     window.history.replaceState(window.history.state, '', url.toString());
   } catch {
     // SSR / non-browser
@@ -196,6 +201,7 @@ function commandsModule({
     syncGroupService,
     segmentationService,
     displaySetService,
+    cornerstoneCacheService,
   } = servicesManager.services as AppTypes.Services;
 
   function _getActiveViewportEnabledElement() {
@@ -1616,6 +1622,119 @@ function commandsModule({
       viewport?.render?.();
     },
     /**
+     * Soft-remount between legacy Volume3D (vtk WebGL) and next GenericViewport
+     * lanes without a full page reload. Flips `useNextViewports`, resets the
+     * viewport service backend, syncs the URL, and remounts every grid pane.
+     */
+    setViewportBackendLane: async ({ useNextViewports, renderMode }) => {
+      const wantNext = Boolean(useNextViewports);
+      const nextRenderMode =
+        wantNext && typeof renderMode === 'string' && VOLUME_3D_PATH_RENDER_MODES.has(renderMode)
+          ? renderMode
+          : wantNext
+            ? 'vtkVolume3d'
+            : undefined;
+
+      setNextViewportsEnabled(wantNext);
+      setVolume3DRenderModeOverride(nextRenderMode);
+      syncUseNextViewportsUrlParam(wantNext);
+      syncVolume3DRenderModeUrlParam(nextRenderMode);
+
+      if (typeof cornerstoneViewportService.resetViewportBackend === 'function') {
+        cornerstoneViewportService.resetViewportBackend();
+      }
+
+      const [dataSource] = extensionManager.getActiveDataSource?.() ?? [];
+      if (!dataSource || !cornerstoneCacheService?.createViewportData) {
+        console.warn(
+          'setViewportBackendLane: missing dataSource or cache service; cannot remount viewports'
+        );
+        return;
+      }
+
+      const { viewports } = viewportGridService.getState() ?? {};
+      if (!viewports?.size) {
+        return;
+      }
+
+      const remounts: Promise<void>[] = [];
+
+      for (const [viewportId, gridVp] of viewports.entries()) {
+        const displaySetUIDs = gridVp.displaySetInstanceUIDs ?? [];
+        if (!displaySetUIDs.length) {
+          continue;
+        }
+
+        const displaySets = displaySetUIDs
+          .map(uid => displaySetService.getDisplaySetByUID(uid))
+          .filter(Boolean);
+        if (!displaySets.length) {
+          continue;
+        }
+
+        const viewportInfo = cornerstoneViewportService.getViewportInfo?.(viewportId);
+        if (!viewportInfo) {
+          continue;
+        }
+
+        let rawType = gridVp.viewportOptions?.viewportType as string | undefined;
+        const lowerRaw = rawType?.toLowerCase().replace(/_/g, '') ?? '';
+        if (!rawType || lowerRaw.endsWith('next')) {
+          const shape = viewportInfo.getViewportData?.()?.dataShapeType as string | undefined;
+          const shapeLower = shape?.toLowerCase().replace(/_/g, '') ?? '';
+          if (shapeLower === 'volume3d') {
+            rawType = 'volume3d';
+          } else if (shapeLower === 'orthographic') {
+            rawType = 'orthographic';
+          } else if (shapeLower === 'stack') {
+            rawType = 'stack';
+          } else {
+            rawType = displaySets[0]?.viewportType ?? rawType ?? 'stack';
+          }
+        }
+
+        const ohifViewportType = toOhifViewportType(rawType);
+
+        const viewportOptions = {
+          ...gridVp.viewportOptions,
+          viewportId,
+          viewportType: ohifViewportType,
+        };
+
+        const displaySetOptions =
+          gridVp.displaySetOptions?.length === displaySets.length
+            ? gridVp.displaySetOptions
+            : displaySets.map(() => ({}));
+
+        remounts.push(
+          (async () => {
+            const viewportData = await cornerstoneCacheService.createViewportData(
+              displaySets,
+              viewportOptions,
+              dataSource,
+              undefined
+            );
+            const presentations = getViewportPresentations(viewportId, viewportOptions);
+            cornerstoneViewportService.setViewportData(
+              viewportId,
+              viewportData,
+              viewportOptions,
+              displaySetOptions,
+              presentations
+            );
+          })()
+        );
+      }
+
+      await Promise.all(remounts);
+
+      if (wantNext && nextRenderMode === 'slicerLiveVolume3d') {
+        for (const viewportId of viewports.keys()) {
+          markSlicerLiveVolumeViewport(viewportId, true);
+        }
+      }
+    },
+    /**
      * Switch Volume3D render path (slicerLive / mview / vtk) by updating the
      * global override and remounting the viewport display sets.
      */
@@ -1630,6 +1749,7 @@ function commandsModule({
             setDisplaySets?: (
               ...entries: Array<{ displaySetId: string; options?: Record<string, unknown> }>
             ) => Promise<void>;
+            resize?: () => void;
             render?: () => void;
           }
         | null
@@ -1669,6 +1789,13 @@ function commandsModule({
           ? displayPreset
           : displayPreset?.[modality] || displayPreset?.default || 'CT-Bone';
       ops.setPreset(viewport as Parameters<typeof ops.setPreset>[0], presetName);
+
+      // Hot-switch from mview (custom pipeline, VTK canvas display:none) must
+      // re-enter the VTK resize path before the first OpenGL present — otherwise
+      // the volume stays blank until the user interacts / the window resizes.
+      viewport.resize?.();
+      const renderingEngine = cornerstoneViewportService.getRenderingEngine();
+      renderingEngine?.resize?.(true);
       viewport.render?.();
     },
     setMviewVolumeProjection: ({ viewportId, projection }) => {
@@ -3032,6 +3159,9 @@ function commandsModule({
     },
     setVolume3DRenderMode: {
       commandFn: actions.setVolume3DRenderMode,
+    },
+    setViewportBackendLane: {
+      commandFn: actions.setViewportBackendLane,
     },
     setMviewVolumeProjection: {
       commandFn: actions.setMviewVolumeProjection,

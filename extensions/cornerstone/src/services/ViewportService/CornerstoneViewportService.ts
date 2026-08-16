@@ -174,6 +174,22 @@ class CornerstoneViewportService
     }
     return this._backend;
   }
+
+  /**
+   * Drop the cached Legacy/Next mount backend so the next mount picks up the
+   * current `isNextViewportsEnabled()` value. Used by soft remount when the
+   * session lane flips without a full page reload.
+   */
+  public resetViewportBackend(): void {
+    if (this._backend) {
+      try {
+        this._backend.destroy();
+      } catch (e) {
+        console.warn('Viewport backend destroy failed during reset', e);
+      }
+    }
+    this._backend = null;
+  }
   hangingProtocolService: unknown;
   viewportsInfo: unknown;
   sceneVolumeInputs: unknown;

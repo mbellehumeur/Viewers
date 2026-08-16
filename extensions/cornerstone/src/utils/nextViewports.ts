@@ -19,6 +19,47 @@ export function isNextViewportsEnabled(): boolean {
 }
 
 /**
+ * Keep `?useNextViewports=` in sync after a soft remount (no full reload).
+ */
+export function syncUseNextViewportsUrlParam(enabled: boolean): void {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set('useNextViewports', enabled ? 'true' : 'false');
+    window.history.replaceState(window.history.state, '', url.toString());
+  } catch {
+    // SSR / non-browser
+  }
+}
+
+/**
+ * Map a stored CS / next type string back to an OHIF hanging-protocol type
+ * (`volume3d`, `stack`, …) so `createViewportData` can re-resolve under the
+ * current next/legacy flag.
+ */
+export function toOhifViewportType(viewportType: string | undefined): string {
+  if (!viewportType) {
+    return 'stack';
+  }
+  const lower = viewportType.toLowerCase().replace(/_/g, '');
+  if (lower === 'volume3dnext') {
+    return 'volume3d';
+  }
+  if (lower === 'planarnext') {
+    return 'orthographic';
+  }
+  if (lower === 'videonext') {
+    return 'video';
+  }
+  if (lower === 'wholeslidenext') {
+    return 'wholeslide';
+  }
+  if (lower === 'ecgnext') {
+    return 'ecg';
+  }
+  return viewportType;
+}
+
+/**
  * Resolves the effective flag at init. A `useNextViewports` URL query parameter
  * takes precedence over the appConfig value, so the native backend can be opted
  * into per-session via the URL (e.g. `?useNextViewports=true`) without editing

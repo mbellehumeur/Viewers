@@ -24,6 +24,11 @@ export const TOOLBAR_SECTIONS = {
   secondary: 'secondary',
 
   /**
+   * Right-side header toolbar (before undo/patient/settings)
+   */
+  right: 'right',
+
+  /**
    * Viewport action menu sections
    */
   viewportActionMenu: {
@@ -527,10 +532,12 @@ export default class ToolbarService extends PubSubService {
     const buttonSectionIds = this.state.buttonSections[sectionId];
 
     return (
-      buttonSectionIds?.map(btnId => {
-        const btn = this.state.buttons[btnId];
-        return this._mapButtonToDisplay(btn, props);
-      }) || []
+      buttonSectionIds
+        ?.map(btnId => {
+          const btn = this.state.buttons[btnId];
+          return this._mapButtonToDisplay(btn, props);
+        })
+        .filter(Boolean) || []
     );
   }
 
@@ -679,6 +686,11 @@ export default class ToolbarService extends PubSubService {
     }
 
     toolbarButtons.forEach(button => {
+      // Section ids can briefly reference buttons that are not registered yet
+      // (or were cleared); skip holes so nested evaluate does not throw.
+      if (!button?.componentProps) {
+        return;
+      }
       this.handleEvaluate(button.componentProps);
     });
   };

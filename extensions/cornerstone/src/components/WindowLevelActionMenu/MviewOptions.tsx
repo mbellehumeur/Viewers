@@ -102,7 +102,7 @@ export function MviewOptions({
     setDecision(readTargetFpsDecision(viewportId));
     const timer = window.setInterval(() => {
       setDecision(readTargetFpsDecision(viewportId));
-    }, 1000);
+    }, 200);
     return () => window.clearInterval(timer);
   }, [viewportId, isMview, enabled]);
 
@@ -173,7 +173,7 @@ export function MviewOptions({
                 {decision.lastDragAvgFps > 0 ? (
                   <>
                     <div>
-                      last drag {decision.lastDragAvgFps.toFixed(1)} fps ·{' '}
+                      sample {decision.lastDragAvgFps.toFixed(1)} fps ·{' '}
                       {decision.lastDragFrames} frames
                     </div>
                     <div>
@@ -181,16 +181,16 @@ export function MviewOptions({
                       {formatBudgetPx(decision.lastDragBudgetTo)}
                     </div>
                     <div>
-                      next drag scale {decision.lastDragScale.toFixed(2)} ·{' '}
+                      drag scale {decision.lastDragScale.toFixed(2)} ·{' '}
                       {decision.lastDragSteps} steps
                     </div>
                   </>
                 ) : decision.lastDragFrames > 0 ? (
                   <div>
-                    last drag: not enough frames ({decision.lastDragFrames})
+                    sample: not enough frames ({decision.lastDragFrames})
                   </div>
                 ) : (
-                  <div>drag to sample FPS</div>
+                  <div>drag to adapt FPS</div>
                 )}
               </>
             )}

@@ -10,37 +10,31 @@ import {
 
 const LEGACY_MODE = 'legacy';
 
+/** Selectable modes shown in the corner menu popover. */
 const RENDER_MODES: { value: string; label: string }[] = [
-  { value: LEGACY_MODE, label: 'legacy (reload)' },
-  { value: 'vtkVolume3d', label: 'vtk (WebGL)' },
-  { value: 'mviewVolume3d', label: 'mview (WebGPU)' },
-  { value: 'slicerLiveVolume3d', label: 'slicerLive (WebGPU)' },
+  { value: LEGACY_MODE, label: 'vtk WebGL' },
+  { value: 'vtkVolume3d', label: 'next-vtk (WebGL)' },
+  { value: 'mviewVolume3d', label: 'next-mview (WebGPU)' },
 ];
 
-const NEXT_PATH_MODES = new Set(
-  RENDER_MODES.map(m => m.value).filter(v => v !== LEGACY_MODE)
-);
+/** Labels for known modes, including URL-only overrides not in the menu. */
+const MODE_LABELS: Record<string, string> = {
+  [LEGACY_MODE]: 'vtk WebGL',
+  vtkVolume3d: 'next-vtk (WebGL)',
+  mviewVolume3d: 'next-mview (WebGPU)',
+  slicerLiveVolume3d: 'slicerLive (WebGPU)',
+};
+
+const NEXT_PATH_MODES = new Set([
+  ...RENDER_MODES.map(m => m.value).filter(v => v !== LEGACY_MODE),
+  'slicerLiveVolume3d',
+]);
 
 function labelForMode(mode: string | undefined): string {
-  return RENDER_MODES.find(m => m.value === mode)?.label ?? 'Render';
-}
-
-/**
- * Reload with the requested next/legacy session flag so init picks the right
- * viewport backend. Preserves the rest of the URL (study, HP, etc.).
- */
-function navigateViewportBackend(options: {
-  useNextViewports: boolean;
-  renderMode?: string;
-}): void {
-  const url = new URL(window.location.href);
-  url.searchParams.set('useNextViewports', options.useNextViewports ? 'true' : 'false');
-  if (options.useNextViewports && options.renderMode) {
-    url.searchParams.set('renderMode', options.renderMode);
-  } else {
-    url.searchParams.delete('renderMode');
+  if (!mode) {
+    return 'Render';
   }
-  window.location.assign(url.toString());
+  return MODE_LABELS[mode] ?? 'Render';
 }
 
 function readRenderMode(
@@ -125,21 +119,29 @@ function ViewportRenderModeMenu({
 
     const onNext = isNextViewportsEnabled();
 
-    // Legacy ↔ next requires a full reload (backend is chosen once at init).
+    // Legacy ↔ next: soft remount (flip session lane + remount viewports).
     if (mode === LEGACY_MODE) {
       setCurrentMode(LEGACY_MODE);
       onClose?.();
-      navigateViewportBackend({ useNextViewports: false });
+      await commandsManager.runCommand('setViewportBackendLane', {
+        useNextViewports: false,
+      });
+      syncFromViewport();
       return;
     }
 
     if (!onNext) {
       setCurrentMode(mode);
       onClose?.();
-      navigateViewportBackend({ useNextViewports: true, renderMode: mode });
+      await commandsManager.runCommand('setViewportBackendLane', {
+        useNextViewports: true,
+        renderMode: mode,
+      });
+      syncFromViewport();
       return;
     }
 
+    // Already on next: hot-switch Volume3D render path only.
     setCurrentMode(mode);
     onClose?.();
     await commandsManager.runCommand('setVolume3DRenderMode', {
@@ -203,7 +205,7 @@ function ViewportRenderModeMenu({
         </div>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[170px] flex-shrink-0 flex-col items-start rounded p-1"
+        className="w-[190px] flex-shrink-0 flex-col items-start rounded p-1"
         align={align}
         side={side}
         style={{ left: 0 }}

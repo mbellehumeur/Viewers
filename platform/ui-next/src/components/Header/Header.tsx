@@ -31,6 +31,7 @@ interface HeaderProps {
   PatientInfo?: ReactNode;
   Secondary?: ReactNode;
   UndoRedo?: ReactNode;
+  RightToolbar?: ReactNode;
 }
 
 function Header({
@@ -43,6 +44,7 @@ function Header({
   PatientInfo,
   UndoRedo,
   Secondary,
+  RightToolbar,
   ...props
 }: HeaderProps): ReactNode {
   const onClickReturn = () => {
@@ -81,6 +83,7 @@ function Header({
             <div className="flex items-center justify-center space-x-2">{children}</div>
           </div>
           <div className="absolute right-0 top-1/2 flex -translate-y-1/2 select-none items-center">
+            {RightToolbar && <div className="mr-1.5 flex items-center">{RightToolbar}</div>}
             {UndoRedo}
             <div className="border-muted mx-1.5 h-[25px] border-r"></div>
             {PatientInfo}
