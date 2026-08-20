@@ -12,14 +12,14 @@ const LEGACY_MODE = 'legacy';
 
 /** Selectable modes shown in the corner menu popover. */
 const RENDER_MODES: { value: string; label: string }[] = [
-  { value: LEGACY_MODE, label: 'vtk WebGL' },
+  { value: LEGACY_MODE, label: 'vtk (WebGL)' },
   { value: 'vtkVolume3d', label: 'next-vtk (WebGL)' },
   { value: 'mviewVolume3d', label: 'next-mview (WebGPU)' },
 ];
 
 /** Labels for known modes, including URL-only overrides not in the menu. */
 const MODE_LABELS: Record<string, string> = {
-  [LEGACY_MODE]: 'vtk WebGL',
+  [LEGACY_MODE]: 'vtk (WebGL)',
   vtkVolume3d: 'next-vtk (WebGL)',
   mviewVolume3d: 'next-mview (WebGPU)',
   slicerLiveVolume3d: 'slicerLive (WebGPU)',
@@ -208,7 +208,6 @@ function ViewportRenderModeMenu({
         className="w-[190px] flex-shrink-0 flex-col items-start rounded p-1"
         align={align}
         side={side}
-        style={{ left: 0 }}
       >
         {RENDER_MODES.map(({ value, label }) => (
           <Button

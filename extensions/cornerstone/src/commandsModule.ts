@@ -1622,7 +1622,7 @@ function commandsModule({
       viewport?.render?.();
     },
     /**
-     * Soft-remount between legacy Volume3D (vtk WebGL) and next GenericViewport
+     * Soft-remount between legacy Volume3D (vtk (WebGL)) and next GenericViewport
      * lanes without a full page reload. Flips `useNextViewports`, resets the
      * viewport service backend, syncs the URL, and remounts every grid pane.
      */

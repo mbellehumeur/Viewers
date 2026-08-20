@@ -198,10 +198,14 @@ export class LegacyViewportBackend implements IViewportBackend {
     viewportId: string
   ): PositionPresentation {
     const vp = csViewport as Types.IStackViewport;
+    const viewPresentation =
+      typeof vp.getViewPresentation === 'function'
+        ? vp.getViewPresentation({ pan: true, zoom: true })
+        : undefined;
     return {
       viewportType: viewportInfo.getViewportType(),
       viewReference: isVolume3DViewportType(csViewport) ? null : vp.getViewReference(),
-      viewPresentation: vp.getViewPresentation({ pan: true, zoom: true }),
+      viewPresentation,
       viewportId,
     };
   }
@@ -224,7 +228,7 @@ export class LegacyViewportBackend implements IViewportBackend {
     }
 
     const viewPresentation = positionPresentation?.viewPresentation;
-    if (viewPresentation) {
+    if (viewPresentation && typeof vp.setViewPresentation === 'function') {
       vp.setViewPresentation(viewPresentation);
     }
   }

@@ -795,7 +795,7 @@ export const toolbarSections = {
 
   [TOOLBAR_SECTIONS.right]: ['SegRoulette'],
 
-  [TOOLBAR_SECTIONS.viewportActionMenu.topLeft]: ['dataOverlayMenu', 'renderModeMenu'],
+  [TOOLBAR_SECTIONS.viewportActionMenu.topLeft]: ['dataOverlayMenu'],
 
   [TOOLBAR_SECTIONS.viewportActionMenu.bottomMiddle]: ['AdvancedRenderingControls'],
 
@@ -811,6 +811,7 @@ export const toolbarSections = {
     'modalityLoadBadge',
     'trackingStatus',
     'navigationComponent',
+    'renderModeMenu',
   ],
 
   [TOOLBAR_SECTIONS.viewportActionMenu.bottomLeft]: ['windowLevelMenu'],
