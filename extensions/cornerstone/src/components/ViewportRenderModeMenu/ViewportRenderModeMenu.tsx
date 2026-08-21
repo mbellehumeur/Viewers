@@ -186,6 +186,12 @@ function ViewportRenderModeMenu({
               tooltip={restProps.tooltip as string | undefined}
               {...restProps}
               {...containerProps}
+              // Tiny action-corner buttons default to w-6; this label is wider and
+              // must size to content or the right edge is clipped by the pane.
+              className={cn(
+                (containerProps as { className?: string }).className,
+                'h-6 w-auto min-w-6 px-1'
+              )}
             >
               <span className={cn(iconClassName, 'px-0.5 text-xs font-medium leading-none')}>
                 {triggerLabel}
@@ -197,7 +203,7 @@ function ViewportRenderModeMenu({
               size="icon"
               disabled={disabled}
               onClick={() => {}}
-              className="h-7 min-w-7 px-1 text-xs font-medium"
+              className="h-7 w-auto min-w-7 px-1 text-xs font-medium"
             >
               {triggerLabel}
             </Button>
@@ -208,6 +214,7 @@ function ViewportRenderModeMenu({
         className="w-[190px] flex-shrink-0 flex-col items-start rounded p-1"
         align={align}
         side={side}
+        collisionPadding={8}
       >
         {RENDER_MODES.map(({ value, label }) => (
           <Button

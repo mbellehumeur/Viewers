@@ -1,5 +1,5 @@
 import { ShepherdBase } from 'shepherd.js';
-import { offset, flip, shift, detectOverflow } from '@floating-ui/dom';
+import { offset, detectOverflow } from '@floating-ui/dom';
 
 /**
  * Retrieves the list of tours that have been shown from localStorage.
@@ -80,12 +80,13 @@ const customMiddleware = {
 };
 
 /**
- * Default Floating UI middleware for positioning steps in Shepherd.js.
- * Includes offset, shift, flip, and custom overflow middleware.
+ * Default Floating UI middleware for Shepherd steps.
+ * Do not add flip/shift from @floating-ui/dom here — Shepherd already provides
+ * compatible ones from its bundled Floating UI. App-level flip/shift call
+ * platform.detectOverflow, which Shepherd's platform does not define.
  *
  * @type {Array<object>}
  */
-
-const middleware = [offset(15), shift(), flip(), customMiddleware];
+const middleware = [offset(15), customMiddleware];
 
 export { hasTourBeenShown, markTourAsShown, middleware, defaultShowHandler };
