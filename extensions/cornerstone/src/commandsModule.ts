@@ -17,6 +17,7 @@ import {
   setMviewVolume3DThreshold,
   setMviewVolume3DTargetFps,
   setMviewVolume3DTargetFpsEnabled,
+  setMviewVolume3DMinBudgetPx,
   isMviewVolume3DRenderMode,
   isMviewVolume3DProjection,
   isMviewVolume3DPresentQuality,
@@ -1849,6 +1850,16 @@ function commandsModule({
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
       viewport?.render?.();
     },
+    setMviewVolumeMinBudgetPx: ({ viewportId, minPx }) => {
+      if (!viewportId || !Number.isFinite(minPx)) {
+        return;
+      }
+      if (!setMviewVolume3DMinBudgetPx(viewportId, minPx)) {
+        return;
+      }
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      viewport?.render?.();
+    },
     setSlicerLiveVolumeShade: ({ viewportId, shade }) => {
       if (!viewportId || typeof shade !== 'boolean') {
         return;
@@ -3177,6 +3188,9 @@ function commandsModule({
     },
     setMviewVolumeTargetFpsEnabled: {
       commandFn: actions.setMviewVolumeTargetFpsEnabled,
+    },
+    setMviewVolumeMinBudgetPx: {
+      commandFn: actions.setMviewVolumeMinBudgetPx,
     },
     setSlicerLiveVolumeShade: {
       commandFn: actions.setSlicerLiveVolumeShade,

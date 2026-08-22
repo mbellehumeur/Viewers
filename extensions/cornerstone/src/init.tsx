@@ -72,7 +72,8 @@ export default async function init({
   // Note: this should run first before initializing the cornerstone
   // DO NOT CHANGE THE ORDER
 
-  // Stats overlay is off by default; toggle with the hotkey (ctrl+shift+d) or ?debug=true.
+  // Stats overlay: appConfig.statsOverlay (dev/default enable it) or ?debug=true.
+  // Toggle at runtime with Ctrl+Shift+D.
   const statsOverlay =
     Boolean(appConfig.statsOverlay) ||
     new URLSearchParams(window.location.search).get('debug') === 'true';

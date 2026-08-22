@@ -1,7 +1,11 @@
 import React, { ReactElement, useCallback, useEffect, useState } from 'react';
 import {
+  MVIEW_DEFAULT_MIN_BUDGET_PX,
   MVIEW_DEFAULT_TARGET_FPS,
+  MVIEW_MIN_BUDGET_PX_CEILING,
+  MVIEW_MIN_BUDGET_PX_FLOOR,
   getMviewVolume3D,
+  getMviewVolume3DMinBudgetPx,
   getMviewVolume3DRenderMode,
   getMviewVolume3DTargetFps,
   getMviewVolume3DTargetFpsEnabled,
@@ -13,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { MviewVolumePresentQuality } from './MviewVolumePresentQuality';
 
 const TARGET_FPS_MAX = 60;
+const MIN_BUDGET_STEP_PX = 10_000;
 
 type TargetFpsDecision = {
   lastDragAvgFps: number;
@@ -74,6 +79,11 @@ export function MviewOptions({
       ? (getMviewVolume3DTargetFps(viewportId) ?? MVIEW_DEFAULT_TARGET_FPS)
       : MVIEW_DEFAULT_TARGET_FPS
   );
+  const [minBudgetPx, setMinBudgetPx] = useState(() =>
+    viewportId && isMview
+      ? (getMviewVolume3DMinBudgetPx(viewportId) ?? MVIEW_DEFAULT_MIN_BUDGET_PX)
+      : MVIEW_DEFAULT_MIN_BUDGET_PX
+  );
   const [mviewMode, setMviewMode] = useState<MviewMode | undefined>(() =>
     viewportId && isMview
       ? (getMviewVolume3DRenderMode(viewportId) ?? 'composite')
@@ -90,6 +100,9 @@ export function MviewOptions({
     setEnabled(getMviewVolume3DTargetFpsEnabled(viewportId) ?? true);
     setTargetFps(
       getMviewVolume3DTargetFps(viewportId) ?? MVIEW_DEFAULT_TARGET_FPS
+    );
+    setMinBudgetPx(
+      getMviewVolume3DMinBudgetPx(viewportId) ?? MVIEW_DEFAULT_MIN_BUDGET_PX
     );
     setMviewMode(getMviewVolume3DRenderMode(viewportId) ?? 'composite');
     setDecision(readTargetFpsDecision(viewportId));
@@ -122,15 +135,39 @@ export function MviewOptions({
   );
 
   const onTargetFps = useCallback(
-    (value: number) => {
+    (value: number | [number, number]) => {
       if (!viewportId) {
         return;
       }
-      const next = Math.max(1, Math.round(value));
+      const raw = Array.isArray(value) ? value[0] : value;
+      const next = Math.max(1, Math.round(raw));
       setTargetFps(next);
       commandsManager.runCommand('setMviewVolumeTargetFps', {
         viewportId,
         fps: next,
+      });
+      setDecision(readTargetFpsDecision(viewportId));
+    },
+    [commandsManager, viewportId]
+  );
+
+  const onMinBudgetPx = useCallback(
+    (value: number | [number, number]) => {
+      if (!viewportId) {
+        return;
+      }
+      const raw = Array.isArray(value) ? value[0] : value;
+      const next = Math.min(
+        MVIEW_MIN_BUDGET_PX_CEILING,
+        Math.max(
+          MVIEW_MIN_BUDGET_PX_FLOOR,
+          Math.round(raw / MIN_BUDGET_STEP_PX) * MIN_BUDGET_STEP_PX
+        )
+      );
+      setMinBudgetPx(next);
+      commandsManager.runCommand('setMviewVolumeMinBudgetPx', {
+        viewportId,
+        minPx: next,
       });
       setDecision(readTargetFpsDecision(viewportId));
     },
@@ -194,6 +231,22 @@ export function MviewOptions({
                 )}
               </>
             )}
+          </div>
+        </Numeric.Container>
+        <Numeric.Container
+          mode="singleRange"
+          min={MVIEW_MIN_BUDGET_PX_FLOOR}
+          max={MVIEW_MIN_BUDGET_PX_CEILING}
+          step={MIN_BUDGET_STEP_PX}
+          value={minBudgetPx}
+          onChange={onMinBudgetPx}
+        >
+          <div className="mt-3 flex flex-row items-center">
+            <Numeric.Label className="w-16">{t('Min budget')}</Numeric.Label>
+            <Numeric.SingleRange sliderClassName="mx-2 flex-grow" />
+          </div>
+          <div className="text-muted-foreground mt-1 px-2 text-xs">
+            {formatBudgetPx(minBudgetPx)} px floor
           </div>
         </Numeric.Container>
       </div>
