@@ -240,6 +240,8 @@ function initMPRToolGroup(extensionManager, toolGroupService, commandsManager) {
   toolGroupService.createToolGroupAndAddTools('mpr', tools);
 }
 
+// Volume3D gestures: 1-finger/left = rotate; pinch / Ctrl+wheel = zoom;
+// 2-finger move / plain wheel = pan (ZoomTool.mouseWheelCallback routes wheel).
 function initVolume3DToolGroup(extensionManager, toolGroupService) {
   const utilityModule = extensionManager.getModuleEntry(
     '@ohif/extension-cornerstone.utilityModule.tools'
