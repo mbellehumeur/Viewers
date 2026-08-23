@@ -262,6 +262,7 @@ export const basicLayout = {
     // modify them (e.g. swap in the segmentation panels with editing tools)
     // before the sidebars resolve.
     leftPanels: [ohif.thumbnailList],
+    leftPanelClosed: true,
     leftPanelResizable: true,
     rightPanels: [cornerstone.segmentation, cornerstone.measurements],
     rightPanelClosed: true,

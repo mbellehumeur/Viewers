@@ -294,6 +294,7 @@ function initVolume3DToolGroup(extensionManager, toolGroupService) {
         bindings: [
           { mouseButton: Enums.MouseBindings.Secondary },
           { mouseButton: Enums.MouseBindings.Wheel },
+          { numTouchPoints: 2 },
         ],
       },
       {

@@ -5,7 +5,8 @@ import { useDefaultWorkflow } from '../hooks/useDefaultWorkflow';
 
 /**
  * Represents a workflow that can be launched from the study list.
- * Each workflow corresponds to a mode from appConfig.loadedModes.
+ * Most workflows map to a mode from appConfig.loadedModes; a few are
+ * Basic Viewer shortcuts that add hangingProtocolId to the URL.
  */
 export interface Workflow {
   /** Unique identifier for the workflow (from mode.id) */
@@ -56,6 +57,28 @@ type WorkflowsProviderProps = {
   children: React.ReactNode;
 };
 
+/** Study-list shortcuts that open Basic Viewer with a hangingProtocolId query param. */
+const BASIC_VIEWER_HANGING_PROTOCOL_SHORTCUTS = [
+  { id: 'viewer-only3D', displayName: '3D Only', hangingProtocolId: 'only3D' },
+  { id: 'viewer-mpr', displayName: 'MPR', hangingProtocolId: 'mpr' },
+] as const;
+
+function isModeApplicableToStudy(mode: Mode, studyRow: StudyRow): boolean {
+  if (!mode.isValidMode) {
+    return true;
+  }
+
+  const modalitiesToCheck = String(studyRow.modalities ?? '').replaceAll('/', '\\');
+  const result = mode.isValidMode({
+    modalities: modalitiesToCheck,
+    study: studyRow,
+  });
+
+  // Return true only if valid is explicitly true
+  // null means hide (not applicable), false means disabled but visible
+  return result.valid === true;
+}
+
 /**
  * Provider that creates workflows from loaded modes and provides them via context.
  * Each workflow can launch studies and determine applicability based on mode validation.
@@ -90,6 +113,41 @@ export function WorkflowsProvider({
 
   const workflows = React.useMemo(() => {
     const workflowList: Workflow[] = [];
+    const viewerMode = loadedModes.find(mode => !mode.hide && mode.routeName === 'viewer');
+
+    // Prefixed before mode workflows: Basic Viewer + hangingProtocolId in the URL.
+    if (viewerMode) {
+      for (const shortcut of BASIC_VIEWER_HANGING_PROTOCOL_SHORTCUTS) {
+        workflowList.push({
+          get id() {
+            return shortcut.id;
+          },
+          get displayName() {
+            return shortcut.displayName;
+          },
+          launchWithStudy: (studyRow: StudyRow) => {
+            if (!studyRow.studyInstanceUid) {
+              console.warn('Cannot launch workflow: study has no studyInstanceUid');
+              return;
+            }
+
+            const query = new URLSearchParams();
+            query.append('StudyInstanceUIDs', studyRow.studyInstanceUid);
+            // Preserve first, then set HP so an existing hangingProtocolId is replaced
+            // (preserveQueryParameters also skips keys already present on `query`).
+            preserveQueryParameters(query);
+            query.set('hangingProtocolId', shortcut.hangingProtocolId);
+
+            const route = `${viewerMode.routeName}${dataPath || ''}?${query.toString()}`;
+            navigate(route);
+          },
+          isApplicableToStudy: (studyRow: StudyRow) => isModeApplicableToStudy(viewerMode, studyRow),
+          get isDefault() {
+            return false;
+          },
+        });
+      }
+    }
 
     for (const mode of loadedModes) {
       // Filter out hidden modes
@@ -124,22 +182,7 @@ export function WorkflowsProvider({
           const route = `${mode.routeName}${dataPath || ''}?${query.toString()}`;
           navigate(route);
         },
-        isApplicableToStudy: (studyRow: StudyRow) => {
-          if (!mode.isValidMode) {
-            // If no validation function, assume applicable
-            return true;
-          }
-
-          const modalitiesToCheck = String(studyRow.modalities ?? '').replaceAll('/', '\\');
-          const result = mode.isValidMode({
-            modalities: modalitiesToCheck,
-            study: studyRow,
-          });
-
-          // Return true only if valid is explicitly true
-          // null means hide (not applicable), false means disabled but visible
-          return result.valid === true;
-        },
+        isApplicableToStudy: (studyRow: StudyRow) => isModeApplicableToStudy(mode, studyRow),
         get isDefault() {
           return isDefault;
         },

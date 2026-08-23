@@ -183,7 +183,6 @@ export function getViewportRenderingOverride(viewportType: string): string | und
 const VOLUME_3D_RENDER_MODES = new Set([
   'vtkVolume3d',
   'webgpuVolume3d',
-  'fuberlinVolume3D',
   'mviewVolume3d',
   'slicerLiveVolume3d',
   'vtkGeometry3d',
@@ -191,8 +190,8 @@ const VOLUME_3D_RENDER_MODES = new Set([
 
 /**
  * Optional Volume3D `renderMode` override from `?renderMode=<mode>` (exact wire
- * id, e.g. `mviewVolume3d` or `fuberlinVolume3D`). Captured at init; when set,
- * NextViewportBackend uses it instead of deriving mode from `viewportRendering`.
+ * id, e.g. `mviewVolume3d`). Captured at init; when set, NextViewportBackend
+ * uses it instead of deriving mode from `viewportRendering`.
  */
 let volume3DRenderModeOverride: string | undefined;
 
@@ -206,22 +205,30 @@ export function getVolume3DRenderModeOverride(): string | undefined {
 
 /**
  * Resolves `?renderMode=` for Volume3D. Accepts known modes; case-insensitive
- * match falls back to the canonical wire id. Returns undefined when absent.
+ * match falls back to the canonical wire id. Legacy `fuberlinVolume3D` aliases
+ * to `mviewVolume3d`. Returns undefined when absent.
  */
 export function resolveVolume3DRenderMode(
   appConfigValue?: unknown
 ): string | undefined {
+  const canonicalize = (raw: string): string | undefined => {
+    if (raw.toLowerCase() === 'fuberlinvolume3d') {
+      return 'mviewVolume3d';
+    }
+    if (VOLUME_3D_RENDER_MODES.has(raw)) {
+      return raw;
+    }
+    return [...VOLUME_3D_RENDER_MODES].find(
+      (mode) => mode.toLowerCase() === raw.toLowerCase()
+    );
+  };
+
   try {
     const params = new URLSearchParams(window.location.search);
     if (params.has('renderMode')) {
       const value = params.get('renderMode')?.trim();
-      if (value && VOLUME_3D_RENDER_MODES.has(value)) {
-        return value;
-      }
       if (value) {
-        const matched = [...VOLUME_3D_RENDER_MODES].find(
-          (mode) => mode.toLowerCase() === value.toLowerCase()
-        );
+        const matched = canonicalize(value);
         if (matched) {
           return matched;
         }
@@ -231,8 +238,8 @@ export function resolveVolume3DRenderMode(
     // SSR / non-browser
   }
 
-  if (typeof appConfigValue === 'string' && VOLUME_3D_RENDER_MODES.has(appConfigValue)) {
-    return appConfigValue;
+  if (typeof appConfigValue === 'string') {
+    return canonicalize(appConfigValue);
   }
 
   return undefined;

@@ -151,6 +151,7 @@ export const basicTestLayout = {
     // Literal panel lists; the shared layout template also accepts
     // customization names here.
     leftPanels: [tracked.thumbnailList],
+    leftPanelClosed: true,
     leftPanelResizable: true,
     rightPanels: [cornerstone.panel, tracked.measurements, testExtension.measurements],
     rightPanelResizable: true,

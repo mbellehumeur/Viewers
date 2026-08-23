@@ -18,6 +18,11 @@ export const preserveKeys = [
 ];
 
 function preserveKey(query: URLSearchParams, current: URLSearchParams, key: string) {
+  // Caller already set this key (e.g. hangingProtocolId on a layout shortcut) —
+  // do not append values from the current URL or they pile up as duplicates.
+  if (query.has(key)) {
+    return;
+  }
   const values = current.getAll(key);
   for (const value of values) {
     if (value) {

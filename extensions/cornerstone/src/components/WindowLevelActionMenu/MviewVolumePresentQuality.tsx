@@ -1,6 +1,6 @@
 import React, { ReactElement, useCallback, useEffect, useState } from 'react';
 import {
-  FUBERLIN_DEFAULT_PRESENT_QUALITY,
+  MVIEW_DEFAULT_PRESENT_QUALITY,
   getMviewVolume3D,
   getMviewVolume3DPresentQuality,
   getMviewVolume3DPresentQualityProfiles,
@@ -60,8 +60,8 @@ export function MviewVolumePresentQuality({
   const [quality, setQuality] = useState<number>(() =>
     viewportId && isMview
       ? (getMviewVolume3DPresentQuality(viewportId) ??
-        FUBERLIN_DEFAULT_PRESENT_QUALITY)
-      : FUBERLIN_DEFAULT_PRESENT_QUALITY
+        MVIEW_DEFAULT_PRESENT_QUALITY)
+      : MVIEW_DEFAULT_PRESENT_QUALITY
   );
   const [profiles, setProfiles] = useState<
     MviewVolume3DPresentQualityProfiles | undefined
@@ -73,7 +73,7 @@ export function MviewVolumePresentQuality({
     }
     setQuality(
       getMviewVolume3DPresentQuality(viewportId) ??
-        FUBERLIN_DEFAULT_PRESENT_QUALITY
+        MVIEW_DEFAULT_PRESENT_QUALITY
     );
     setProfiles(readProfiles(viewportId));
   }, [viewportId, isMview, mode]);

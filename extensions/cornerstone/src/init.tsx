@@ -38,6 +38,7 @@ import {
   setVolume3DRenderModeOverride,
 } from './utils/nextViewports';
 import interleaveCenterLoader from './utils/interleaveCenterLoader';
+import centerSequentialLoader from './utils/centerSequentialLoader';
 import nthLoader from './utils/nthLoader';
 import interleaveTopToBottom from './utils/interleaveTopToBottom';
 import initContextMenu from './initContextMenu';
@@ -242,6 +243,7 @@ export default async function init({
   // Register strategies using the wrapper
   const imageLoadStrategies = {
     interleaveCenter: interleaveCenterLoader,
+    centerSequential: centerSequentialLoader,
     interleaveTopToBottom: interleaveTopToBottom,
     nth: nthLoader,
   };

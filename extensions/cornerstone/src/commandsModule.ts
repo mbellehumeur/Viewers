@@ -4,13 +4,6 @@ import {
   Types as CoreTypes,
   getRenderingEngines,
   toggleStatsOverlay,
-  setFuberlinVolume3DRenderMode,
-  setFuberlinVolume3DProjection,
-  setFuberlinVolume3DPresentQuality,
-  setFuberlinVolume3DThreshold,
-  isFuberlinVolume3DRenderMode,
-  isFuberlinVolume3DProjection,
-  isFuberlinVolume3DPresentQuality,
   setMviewVolume3DRenderMode,
   setMviewVolume3DProjection,
   setMviewVolume3DPresentQuality,
@@ -1563,52 +1556,6 @@ function commandsModule({
     },
 
     /**
-     * Set mview raymarch mode for a fuberlin Volume3D present
-     * (surface | composite | mip).
-     */
-    setFuberlinVolumeRenderMode: ({ viewportId, mode }) => {
-      if (!viewportId || !isFuberlinVolume3DRenderMode(mode)) {
-        return;
-      }
-      if (!setFuberlinVolume3DRenderMode(viewportId, mode)) {
-        return;
-      }
-      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
-      viewport?.render?.();
-    },
-    setFuberlinVolumeProjection: ({ viewportId, projection }) => {
-      if (!viewportId || !isFuberlinVolume3DProjection(projection)) {
-        return;
-      }
-      if (!setFuberlinVolume3DProjection(viewportId, projection)) {
-        return;
-      }
-      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
-      // Re-sync framing from CS camera when entering orthographic mode.
-      viewport?.setViewState?.(viewport.getViewState?.() ?? {});
-      viewport?.render?.();
-    },
-    setFuberlinVolumeThreshold: ({ viewportId, threshold }) => {
-      if (!viewportId || !Number.isFinite(threshold)) {
-        return;
-      }
-      if (!setFuberlinVolume3DThreshold(viewportId, threshold)) {
-        return;
-      }
-      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
-      viewport?.render?.();
-    },
-    setFuberlinVolumePresentQuality: ({ viewportId, quality }) => {
-      if (!viewportId || !isFuberlinVolume3DPresentQuality(quality)) {
-        return;
-      }
-      if (!setFuberlinVolume3DPresentQuality(viewportId, quality)) {
-        return;
-      }
-      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
-      viewport?.render?.();
-    },
-    /**
      * Set mview raymarch mode for an mview Volume3D present
      * (surface | composite | mip).
      */
@@ -3152,18 +3099,6 @@ function commandsModule({
     },
     setVolumeLighting: {
       commandFn: actions.setVolumeLighting,
-    },
-    setFuberlinVolumeRenderMode: {
-      commandFn: actions.setFuberlinVolumeRenderMode,
-    },
-    setFuberlinVolumeProjection: {
-      commandFn: actions.setFuberlinVolumeProjection,
-    },
-    setFuberlinVolumeThreshold: {
-      commandFn: actions.setFuberlinVolumeThreshold,
-    },
-    setFuberlinVolumePresentQuality: {
-      commandFn: actions.setFuberlinVolumePresentQuality,
     },
     setMviewVolumeRenderMode: {
       commandFn: actions.setMviewVolumeRenderMode,

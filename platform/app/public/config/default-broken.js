@@ -1,60 +1,33 @@
 /** @type {AppTypes.Config} */
 
-// Local development configuration.
+// WebGPU + native GenericViewport configuration for local dev and cloud deploys.
 //
-// This is the default config for the dev server (`pnpm run dev`, `dev:fast`,
-// `start`). It is intentionally kept at parity with config/netlify.js (the
-// public demo deploy): every data source is enabled, the `?customization=` URL
-// feature is ON via `customizationUrlPrefixes`, and the same startup
-// `customizationService` modules are loaded — so the whole app, including
-// customizations, can be exercised locally exactly as it runs on the demo.
-// The locked-down config/default.js is what a plain production build emits
-// instead.
+// Build:  APP_CONFIG=config/webgpu.js yarn run build
+// Dev:    APP_CONFIG=config/webgpu.js yarn run dev
+//
+// Enables next viewports and WebGPU render backend by default.
+// Stats overlay: off by default — press ctrl+shift+d to toggle (or ?debug=true).
 window.config = {
-  name: 'config/dev.js',
+  name: 'config/webgpu.js',
   routerBasename: null,
-  // whiteLabeling: {},
   extensions: [],
   modes: [],
   customizationService: [
     '@ohif/extension-default.customizationModule.theme',
-    {
-      'workList.columns': {
-        $apply: columns => columns.filter(c => c.id !== 'patient'),
-      },
-    },
-    {
-      // Disable Shepherd onboarding tour (basicViewerTour).
-      'ohif.tours': {
-        $set: [],
-      },
-    },
   ],
 
-  // URL-driven customizations (?customization=). The `default` prefix (no
-  // slashes) is used for values without a leading slash; every other prefix
-  // must start AND end with a slash and matches the leading `/segment/` of the
-  // value. Files are fetched and parsed as JSONC data — never executed.
-  // e.g. ?customization=tools/ctPresets  ->  ./customizations/tools/ctPresets.jsonc
   customizationUrlPrefixes: {
     default: './customizations/',
   },
 
-  // Native GenericViewport with WebGPU render backend (local cs3d WebGPU branch).
-  // Override per-session: ?useNextViewports=false or ?viewportRendering=webgl
-  // Volume3D default: mview; override with ?renderMode=slicerLiveVolume3d etc.
+  // Native GenericViewport ("next") + WebGPU render backend.
   genericViewports: {
     enabled: true,
     renderMode: 'mviewVolume3d',
   },
 
-  // Stats / Target FPS / Max textures HUD (Ctrl+Shift+D to toggle).
-  statsOverlay: true,
-
   showStudyList: true,
-  // some windows systems have issues with more than 3 web workers
   maxNumberOfWebWorkers: 3,
-  // below flag is for performance reasons, but it might not work for all servers
   showWarningMessageForCrossOrigin: true,
   showCPUFallbackMessage: true,
   showLoadingIndicator: true,
@@ -68,19 +41,70 @@ window.config = {
   maxNumRequests: {
     interaction: 100,
     thumbnail: 5,
-    // Prefetch number is dependent on the http protocol. For http 2 or
-    // above, the number of requests can be go a lot higher.
     prefetch: 25,
   },
-  showErrorDetails: 'always', // 'always', 'dev', 'production'
-  // filterQueryParam: false,
-  // Defines multi-monitor layouts
+  showErrorDetails: 'always',
+  multimonitor: [
+    {
+      id: 'split',
+      test: ({ multimonitor }) => multimonitor === 'split',
+      screens: [
+        {
+          id: 'ohif0',
+          screen: null,
+          location: {
+            screen: 0,
+            width: 0.5,
+            height: 1,
+            left: 0,
+            top: 0,
+          },
+          options: 'location=no,menubar=no,scrollbars=no,status=no,titlebar=no',
+        },
+        {
+          id: 'ohif1',
+          screen: null,
+          location: {
+            width: 0.5,
+            height: 1,
+            left: 0.5,
+            top: 0,
+          },
+          options: 'location=no,menubar=no,scrollbars=no,status=no,titlebar=no',
+        },
+      ],
+    },
+
+    {
+      id: '2',
+      test: ({ multimonitor }) => multimonitor === '2',
+      screens: [
+        {
+          id: 'ohif0',
+          screen: 0,
+          location: {
+            width: 1,
+            height: 1,
+            left: 0,
+            top: 0,
+          },
+          options: 'fullscreen=yes,location=no,menubar=no,scrollbars=no,status=no,titlebar=no',
+        },
+        {
+          id: 'ohif1',
+          screen: 1,
+          location: {
+            width: 1,
+            height: 1,
+            left: 0,
+            top: 0,
+          },
+          options: 'fullscreen=yes,location=no,menubar=no,scrollbars=no,status=no,titlebar=no',
+        },
+      ],
+    },
+  ],
   defaultDataSourceName: 'dicomweb',
-  /* Dynamic config allows user to pass "configUrl" query string this allows to load config without recompiling application. The regex will ensure valid configuration source */
-  // dangerouslyUseDynamicConfig: {
-  //   enabled: true,
-  //   regex: /.*/,
-  // },
   dataSources: [
     {
       namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
@@ -89,9 +113,9 @@ window.config = {
         friendlyName: 'AWS S3 Static wado server',
         name: 'AWS-local',
         // Something here to check build
-        wadoUriRoot: 'https://d3kwq4mnxh61bx.cloudfront.net/dicomweb',
-        qidoRoot: 'https://d3kwq4mnxh61bx.cloudfront.net/dicomweb',
-        wadoRoot: 'https://d3kwq4mnxh61bx.cloudfront.net/dicomweb',
+        wadoUriRoot: 'https://d3kwq4mnxh61bx.cloudfront.net',
+        qidoRoot: 'https://d3kwq4mnxh61bx.cloudfront.net',
+        wadoRoot: 'https://d3kwq4mnxh61bx.cloudfront.net',
         qidoSupportsIncludeField: false,
         imageRendering: 'wadors',
         thumbnailRendering: 'thumbnail',
@@ -114,9 +138,9 @@ window.config = {
       configuration: {
         friendlyName: 'AWS S3 Static wado server',
         name: 'aws',
-        wadoUriRoot: 'http://d14fa38qiwhyfd.cloudfront.net',
-        qidoRoot: 'http://d14fa38qiwhyfd.cloudfront.net',
-        wadoRoot: 'http://d14fa38qiwhyfd.cloudfront.net',
+        wadoUriRoot: 'https://d14fa38qiwhyfd.cloudfront.net/dicomweb',
+        qidoRoot: 'https://d14fa38qiwhyfd.cloudfront.net/dicomweb',
+        wadoRoot: 'https://d14fa38qiwhyfd.cloudfront.net/dicomweb',
         qidoSupportsIncludeField: false,
         imageRendering: 'wadors',
         thumbnailRendering: 'thumbnail',
@@ -283,10 +307,7 @@ window.config = {
     },
   ],
   httpErrorHandler: error => {
-    // This is 429 when rejected from the public idc sandbox too often.
     console.warn(error.status);
-
-    // Could use services manager here to bring up a dialog/modal if needed.
     console.warn('test, navigate to https://ohif.org/');
   },
 };

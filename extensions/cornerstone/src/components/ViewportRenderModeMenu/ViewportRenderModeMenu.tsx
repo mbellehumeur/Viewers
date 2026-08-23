@@ -49,7 +49,7 @@ function readRenderMode(
   if (mode && NEXT_PATH_MODES.has(mode)) {
     return mode;
   }
-  // Unknown next paths (e.g. leftover fuberlin/webgpu URL) still show a label.
+  // Unknown next paths (e.g. leftover webgpu URL) still show a label.
   return mode;
 }
 

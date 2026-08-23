@@ -19,56 +19,14 @@ window.config = {
   customizationService: [
     '@ohif/extension-default.customizationModule.theme',
     {
-      // Top-right badge: live OHIFCornerstoneRenderingEngine viewport `.type`
-      // (volume3d vs volume3d next). Shown when only3D (or any volume3d pane)
-      // has hideOverlays disabled.
-      'viewportOverlay.topRight': {
-        $push: [
-          {
-            id: 'ViewportType',
-            inheritsFrom: 'ohif.overlayItem',
-            title: 'OHIFCornerstoneRenderingEngine viewport type',
-            contentF: ({ viewportId, servicesManager, activeRenderMode }) => {
-              const viewport = servicesManager?.services?.cornerstoneViewportService
-                ?.getRenderingEngine()
-                ?.getViewport(viewportId);
-              const type = viewport?.type;
-              const renderMode =
-                activeRenderMode ??
-                (typeof viewport?.getActiveRenderMode === 'function'
-                  ? viewport.getActiveRenderMode()
-                  : undefined);
-
-              let label = null;
-              if (type === 'volume3dNext') {
-                label = 'volume3d next';
-              } else if (type === 'volume3d') {
-                label = 'volume3d';
-              }
-
-              if (!label) {
-                return null;
-              }
-
-              if (renderMode === 'mviewVolume3d') {
-                return `${label} · mview`;
-              }
-              if (renderMode === 'slicerLiveVolume3d') {
-                return `${label} · slicerlive`;
-              }
-              if (renderMode === 'fuberlinVolume3D') {
-                return `${label} · fuberlin`;
-              }
-              if (renderMode === 'webgpuVolume3d') {
-                return `${label} · webgpu`;
-              }
-              if (renderMode === 'vtkVolume3d') {
-                return `${label} · vtk`;
-              }
-              return label;
-            },
-          },
-        ],
+      'workList.columns': {
+        $apply: columns => columns.filter(c => c.id !== 'patient'),
+      },
+    },
+    {
+      // Disable Shepherd onboarding tour (basicViewerTour).
+      'ohif.tours': {
+        $set: [],
       },
     },
   ],
@@ -84,9 +42,14 @@ window.config = {
 
   // Native GenericViewport with WebGPU render backend (local cs3d WebGPU branch).
   // Override per-session: ?useNextViewports=false or ?viewportRendering=webgl
+  // Volume3D default: mview; override with ?renderMode=slicerLiveVolume3d etc.
   genericViewports: {
     enabled: true,
+    renderMode: 'mviewVolume3d',
   },
+
+  // Stats / Target FPS / Max textures HUD (Ctrl+Shift+D to toggle).
+  statsOverlay: true,
 
   showStudyList: true,
   // some windows systems have issues with more than 3 web workers
@@ -112,67 +75,7 @@ window.config = {
   showErrorDetails: 'always', // 'always', 'dev', 'production'
   // filterQueryParam: false,
   // Defines multi-monitor layouts
-  multimonitor: [
-    {
-      id: 'split',
-      test: ({ multimonitor }) => multimonitor === 'split',
-      screens: [
-        {
-          id: 'ohif0',
-          screen: null,
-          location: {
-            screen: 0,
-            width: 0.5,
-            height: 1,
-            left: 0,
-            top: 0,
-          },
-          options: 'location=no,menubar=no,scrollbars=no,status=no,titlebar=no',
-        },
-        {
-          id: 'ohif1',
-          screen: null,
-          location: {
-            width: 0.5,
-            height: 1,
-            left: 0.5,
-            top: 0,
-          },
-          options: 'location=no,menubar=no,scrollbars=no,status=no,titlebar=no',
-        },
-      ],
-    },
-
-    {
-      id: '2',
-      test: ({ multimonitor }) => multimonitor === '2',
-      screens: [
-        {
-          id: 'ohif0',
-          screen: 0,
-          location: {
-            width: 1,
-            height: 1,
-            left: 0,
-            top: 0,
-          },
-          options: 'fullscreen=yes,location=no,menubar=no,scrollbars=no,status=no,titlebar=no',
-        },
-        {
-          id: 'ohif1',
-          screen: 1,
-          location: {
-            width: 1,
-            height: 1,
-            left: 0,
-            top: 0,
-          },
-          options: 'fullscreen=yes,location=no,menubar=no,scrollbars=no,status=no,titlebar=no',
-        },
-      ],
-    },
-  ],
-  defaultDataSourceName: 'ohif',
+  defaultDataSourceName: 'local5000',
   /* Dynamic config allows user to pass "configUrl" query string this allows to load config without recompiling application. The regex will ensure valid configuration source */
   // dangerouslyUseDynamicConfig: {
   //   enabled: true,
@@ -181,13 +84,39 @@ window.config = {
   dataSources: [
     {
       namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
+      sourceName: 'dicomweb',
+      configuration: {
+        friendlyName: 'AWS S3 Static wado server',
+        name: 'AWS-local',
+        // Something here to check build
+        wadoUriRoot: 'https://d3kwq4mnxh61bx.cloudfront.net/dicomweb',
+        qidoRoot: 'https://d3kwq4mnxh61bx.cloudfront.net/dicomweb',
+        wadoRoot: 'https://d3kwq4mnxh61bx.cloudfront.net/dicomweb', 
+        qidoSupportsIncludeField: false,
+        imageRendering: 'wadors',
+        thumbnailRendering: 'thumbnail',
+        enableStudyLazyLoad: true,
+        supportsFuzzyMatching: false,
+        supportsWildcard: false,
+        staticWado: true,
+        singlepart: 'bulkdata,video',
+        bulkDataURI: {
+          enabled: true,
+          relativeResolution: 'studies',
+          transform: url => url.replace('/pixeldata.mp4', '/rendered'),
+        },
+        omitQuotationForMultipartRequest: true,
+      },
+    },
+    {
+      namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
       sourceName: 'ohif',
       configuration: {
         friendlyName: 'AWS S3 Static wado server',
         name: 'aws',
-        wadoUriRoot: 'https://d14fa38qiwhyfd.cloudfront.net/dicomweb',
-        qidoRoot: 'https://d14fa38qiwhyfd.cloudfront.net/dicomweb',
-        wadoRoot: 'https://d14fa38qiwhyfd.cloudfront.net/dicomweb',
+        wadoUriRoot: 'http://d14fa38qiwhyfd.cloudfront.net',
+        qidoRoot: 'http://d14fa38qiwhyfd.cloudfront.net',
+        wadoRoot: 'http://d14fa38qiwhyfd.cloudfront.net',
         qidoSupportsIncludeField: false,
         imageRendering: 'wadors',
         thumbnailRendering: 'thumbnail',
@@ -305,6 +234,30 @@ window.config = {
       },
     },
 
+    {
+      namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
+      sourceName: 'idc',
+      configuration: {
+        friendlyName: 'NCI Imaging Data Commons',
+        name: 'idc',
+        wadoUriRoot:
+          'https://proxy.imaging.datacommons.cancer.gov/current/viewer-only-no-downloads-see-tinyurl-dot-com-slash-3j3d9jyp/dicomWeb',
+        qidoRoot:
+          'https://proxy.imaging.datacommons.cancer.gov/current/viewer-only-no-downloads-see-tinyurl-dot-com-slash-3j3d9jyp/dicomWeb',
+        wadoRoot:
+          'https://proxy.imaging.datacommons.cancer.gov/current/viewer-only-no-downloads-see-tinyurl-dot-com-slash-3j3d9jyp/dicomWeb',
+        qidoSupportsIncludeField: false,
+        imageRendering: 'wadors',
+        thumbnailRendering: 'wadors',
+        enableStudyLazyLoad: true,
+        supportsFuzzyMatching: false,
+        supportsWildcard: true,
+        bulkDataURI: {
+          enabled: true,
+        },
+        omitQuotationForMultipartRequest: true,
+      },
+    },
     {
       namespace: '@ohif/extension-default.dataSourcesModule.dicomwebproxy',
       sourceName: 'dicomwebproxy',

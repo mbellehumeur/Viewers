@@ -224,7 +224,7 @@ const bindings = [
   },
   {
     commandName: 'toggleStatsOverlay',
-    label: 'Toggle Stats Overlay',
+    label: 'Toggle Stats Overlay (HUD)',
     keys: ['ctrl+shift+d'],
     isEditable: true,
   },

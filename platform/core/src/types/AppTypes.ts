@@ -167,7 +167,7 @@ declare global {
       };
       /**
        * Enable cornerstone's stats/debug overlay (FPS, MS, MB, render-mode bindings).
-       * Off by default; toggle at runtime with the `toggleStatsOverlay` command / hotkey.
+       * Toggle at runtime with the `toggleStatsOverlay` command / hotkey (Ctrl+Shift+D).
        * `?debug=true` also enables it for the session when this is false.
        */
       statsOverlay?: boolean;

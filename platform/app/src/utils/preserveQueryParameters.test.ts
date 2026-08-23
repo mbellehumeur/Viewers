@@ -38,6 +38,15 @@ describe('preserveQueryParameters', () => {
     expect(out.get('foo')).toBeNull();
   });
 
+  it('does not append hangingProtocolId when the target already set it', () => {
+    const current = new URLSearchParams();
+    current.append('hangingProtocolId', 'mpr');
+    const out = new URLSearchParams();
+    out.set('hangingProtocolId', 'only3D');
+    preserveQueryParameters(out, undefined, current);
+    expect(out.getAll('hangingProtocolId')).toEqual(['only3D']);
+  });
+
   it('uses customization service values for multi-key preservation', () => {
     const customizationService = {
       getValue: jest.fn().mockReturnValue(['customization', 'customizationAlt']),

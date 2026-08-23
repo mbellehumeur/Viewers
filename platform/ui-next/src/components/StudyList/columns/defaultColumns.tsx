@@ -60,6 +60,81 @@ export function textColumn(
 
 export const defaultColumns: ColumnDef<StudyRow, unknown>[] = [
   {
+    id: COLUMN_IDS.DESCRIPTION,
+    accessorFn: row => {
+      const r = row as StudyRow;
+      return r.description ?? '';
+    },
+    header: ({ column }) => <DataTable.ColumnHeader column={column} />,
+    cell: ({ row }) => {
+      const description = row.getValue(COLUMN_IDS.DESCRIPTION) as string;
+      return (
+        <div className={!description ? 'text-muted-foreground/40' : ''}>
+          {description || 'No Description'}
+        </div>
+      );
+    },
+    meta: {
+      label: 'Description',
+      headerClassName: 'min-w-[290px]',
+      cellClassName: 'min-w-[290px]',
+      minWidth: 290,
+      priority: 100,
+    },
+  },
+  {
+    id: COLUMN_IDS.MODALITIES,
+    accessorFn: row => {
+      const r = row as StudyRow;
+      return r.modalities ?? '';
+    },
+    header: ({ column }) => <DataTable.ColumnHeader column={column} />,
+    cell: ({ row }) => <div className="truncate">{row.getValue(COLUMN_IDS.MODALITIES)}</div>,
+    filterFn: (row, colId, filter) => {
+      const selected = Array.isArray(filter) ? (filter as string[]) : [];
+      if (!selected.length) {
+        return true;
+      }
+      const tokens = tokenizeModalities(String(row.getValue(colId) ?? ''));
+      const set = new Set(tokens);
+      return selected.some(v => set.has(String(v).toUpperCase()));
+    },
+    meta: {
+      label: 'Modalities',
+      headerClassName: 'min-w-[97px]',
+      cellClassName: 'min-w-[97px]',
+      minWidth: 97,
+      priority: 95,
+    },
+  },
+  {
+    id: COLUMN_IDS.INSTANCES,
+    accessorFn: row => {
+      const r = row as StudyRow;
+      return Number(r.instances ?? 0);
+    },
+    header: ({ column }) => <DataTable.ColumnHeader column={column} />,
+    cell: ({ row }) => {
+      const value = row.getValue(COLUMN_IDS.INSTANCES) as number;
+      return <div className="text-right">{value}</div>;
+    },
+    sortingFn: (a, b, colId) => (a.getValue(colId) as number) - (b.getValue(colId) as number),
+    meta: {
+      label: 'Instances',
+      headerContent: (
+        <Icons.Series
+          className="text-muted-foreground h-4 w-4 shrink-0"
+          aria-hidden="true"
+        />
+      ),
+      align: 'right',
+      headerClassName: 'min-w-[45px]',
+      cellClassName: 'min-w-[45px] overflow-hidden',
+      minWidth: 45,
+      priority: 90,
+    },
+  },
+  {
     id: COLUMN_IDS.PATIENT,
     accessorFn: row => {
       const r = row as StudyRow;
@@ -72,7 +147,7 @@ export const defaultColumns: ColumnDef<StudyRow, unknown>[] = [
       headerClassName: 'min-w-[165px]',
       cellClassName: 'min-w-[165px]',
       minWidth: 165,
-      priority: 100,
+      priority: 80,
     },
   },
   {
@@ -150,54 +225,6 @@ export const defaultColumns: ColumnDef<StudyRow, unknown>[] = [
     },
   },
   {
-    id: COLUMN_IDS.MODALITIES,
-    accessorFn: row => {
-      const r = row as StudyRow;
-      return r.modalities ?? '';
-    },
-    header: ({ column }) => <DataTable.ColumnHeader column={column} />,
-    cell: ({ row }) => <div className="truncate">{row.getValue(COLUMN_IDS.MODALITIES)}</div>,
-    filterFn: (row, colId, filter) => {
-      const selected = Array.isArray(filter) ? (filter as string[]) : [];
-      if (!selected.length) {
-        return true;
-      }
-      const tokens = tokenizeModalities(String(row.getValue(colId) ?? ''));
-      const set = new Set(tokens);
-      return selected.some(v => set.has(String(v).toUpperCase()));
-    },
-    meta: {
-      label: 'Modalities',
-      headerClassName: 'min-w-[97px]',
-      cellClassName: 'min-w-[97px]',
-      minWidth: 97,
-      priority: 60,
-    },
-  },
-  {
-    id: COLUMN_IDS.DESCRIPTION,
-    accessorFn: row => {
-      const r = row as StudyRow;
-      return r.description ?? '';
-    },
-    header: ({ column }) => <DataTable.ColumnHeader column={column} />,
-    cell: ({ row }) => {
-      const description = row.getValue(COLUMN_IDS.DESCRIPTION) as string;
-      return (
-        <div className={!description ? 'text-muted-foreground/40' : ''}>
-          {description || 'No Description'}
-        </div>
-      );
-    },
-    meta: {
-      label: 'Description',
-      headerClassName: 'min-w-[290px]',
-      cellClassName: 'min-w-[290px]',
-      minWidth: 290,
-      priority: 90,
-    },
-  },
-  {
     id: COLUMN_IDS.ACCESSION,
     accessorFn: row => {
       const r = row as StudyRow;
@@ -211,33 +238,6 @@ export const defaultColumns: ColumnDef<StudyRow, unknown>[] = [
       cellClassName: 'min-w-[140px]',
       minWidth: 140,
       priority: 30,
-    },
-  },
-  {
-    id: COLUMN_IDS.INSTANCES,
-    accessorFn: row => {
-      const r = row as StudyRow;
-      return Number(r.instances ?? 0);
-    },
-    header: ({ column }) => <DataTable.ColumnHeader column={column} />,
-    cell: ({ row }) => {
-      const value = row.getValue(COLUMN_IDS.INSTANCES) as number;
-      return <div className="text-right">{value}</div>;
-    },
-    sortingFn: (a, b, colId) => (a.getValue(colId) as number) - (b.getValue(colId) as number),
-    meta: {
-      label: 'Instances',
-      headerContent: (
-        <Icons.Series
-          className="text-muted-foreground h-4 w-4 shrink-0"
-          aria-hidden="true"
-        />
-      ),
-      align: 'right',
-      headerClassName: 'min-w-[45px]',
-      cellClassName: 'min-w-[45px] overflow-hidden',
-      minWidth: 45,
-      priority: 50,
     },
   },
   // Non-hideable trailing actions column to keep the menu at row end
