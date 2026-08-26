@@ -92,7 +92,13 @@ import {
   markSlicerLiveVolumeViewport,
   shouldUseSlicerLiveSegHydration,
 } from './utils/hydrateSlicerLiveSegOverlay';
-import { setVolume3DRenderModeOverride, setNextViewportsEnabled, syncUseNextViewportsUrlParam, toOhifViewportType } from './utils/nextViewports';
+import {
+  setVolume3DRenderModeOverride,
+  setNextViewportsEnabled,
+  syncUseNextViewportsUrlParam,
+  toOhifViewportType,
+  isVtkWasmRegistered,
+} from './utils/nextViewports';
 import { getViewportPresentations } from './utils/presentations/getViewportPresentations';
 import { utilities as segmentationUtilities } from '@cornerstonejs/tools/segmentation';
 import i18n from '@ohif/i18n';
@@ -102,8 +108,12 @@ const VOLUME_3D_PATH_RENDER_MODES = new Set([
   'slicerLiveVolume3d',
   'mviewVolume3d',
   'vtkVolume3d',
+  'vtkWasmVolume3d',
 ]);
 
+function defaultNextVolume3DRenderMode(): string {
+  return isVtkWasmRegistered() ? 'vtkWasmVolume3d' : 'vtkVolume3d';
+}
 function syncVolume3DRenderModeUrlParam(mode: string | undefined): void {
   try {
     const url = new URL(window.location.href);
@@ -1580,7 +1590,7 @@ function commandsModule({
         wantNext && typeof renderMode === 'string' && VOLUME_3D_PATH_RENDER_MODES.has(renderMode)
           ? renderMode
           : wantNext
-            ? 'vtkVolume3d'
+            ? defaultNextVolume3DRenderMode()
             : undefined;
 
       setNextViewportsEnabled(wantNext);

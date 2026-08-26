@@ -6,12 +6,13 @@ import { Popover, PopoverTrigger, PopoverContent, Button, Icons } from '@ohif/ui
 import {
   getVolume3DRenderModeOverride,
   isNextViewportsEnabled,
+  isVtkWasmRegistered,
 } from '../../utils/nextViewports';
 
 const LEGACY_MODE = 'legacy';
 
-/** Selectable modes shown in the corner menu popover. */
-const RENDER_MODES: { value: string; label: string }[] = [
+/** Base selectable modes shown in the corner menu popover. */
+const BASE_RENDER_MODES: { value: string; label: string }[] = [
   { value: LEGACY_MODE, label: 'vtk (WebGL)' },
   { value: 'vtkVolume3d', label: 'next-vtk (WebGL)' },
   { value: 'mviewVolume3d', label: 'next-mview (WebGPU)' },
@@ -21,14 +22,28 @@ const RENDER_MODES: { value: string; label: string }[] = [
 const MODE_LABELS: Record<string, string> = {
   [LEGACY_MODE]: 'vtk (WebGL)',
   vtkVolume3d: 'next-vtk (WebGL)',
+  vtkWasmVolume3d: 'next-vtk-wasm (WebGL)',
   mviewVolume3d: 'next-mview (WebGPU)',
   slicerLiveVolume3d: 'slicerLive (WebGPU)',
 };
 
 const NEXT_PATH_MODES = new Set([
-  ...RENDER_MODES.map(m => m.value).filter(v => v !== LEGACY_MODE),
+  ...BASE_RENDER_MODES.map(m => m.value).filter(v => v !== LEGACY_MODE),
+  'vtkWasmVolume3d',
   'slicerLiveVolume3d',
 ]);
+
+function getMenuRenderModes(): { value: string; label: string }[] {
+  const modes = [...BASE_RENDER_MODES];
+  // Omit when wasm failed to register so the menu has no dead entries.
+  if (isVtkWasmRegistered()) {
+    modes.splice(2, 0, {
+      value: 'vtkWasmVolume3d',
+      label: 'next-vtk-wasm (WebGL)',
+    });
+  }
+  return modes;
+}
 
 function labelForMode(mode: string | undefined): string {
   if (!mode) {
@@ -216,7 +231,7 @@ function ViewportRenderModeMenu({
         side={side}
         collisionPadding={8}
       >
-        {RENDER_MODES.map(({ value, label }) => (
+        {getMenuRenderModes().map(({ value, label }) => (
           <Button
             key={value}
             variant="ghost"

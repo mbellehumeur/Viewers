@@ -96,6 +96,11 @@ function getRuntimeLoadModesExtensions(modules) {
   });
   // TODO - handle more cases for import than just default
   dynamicLoad.push(
+    '  if (module === "@kitware/vtk-wasm") {',
+    '    // Bundled dynamic import (named loadAsync). Avoid bare browserImportFunction.',
+    '    const imported = await import("@kitware/vtk-wasm");',
+    '    return imported;',
+    '  }',
     '  return (await window.browserImportFunction(module)).default;',
     '}\n',
     '// Import a list of items (modules or string names)',

@@ -82,6 +82,8 @@ const RENDER_BACKEND_ALIASES: Record<string, string> = {
   gpu: 'gpu',
   cpu: 'cpu',
   auto: 'auto',
+  vtkwasm: 'vtkWasm',
+  'vtk-wasm': 'vtkWasm',
 };
 
 function normalizeRenderBackend(value: unknown): string | undefined {
@@ -185,8 +187,23 @@ const VOLUME_3D_RENDER_MODES = new Set([
   'webgpuVolume3d',
   'mviewVolume3d',
   'slicerLiveVolume3d',
+  'vtkWasmVolume3d',
   'vtkGeometry3d',
 ]);
+
+/**
+ * Whether `registerVtkWasmRenderBackend()` succeeded this session.
+ * Used for corner-menu visibility and default Volume3D/MPR fallbacks.
+ */
+let vtkWasmRegistered = false;
+
+export function setVtkWasmRegistered(value: boolean): void {
+  vtkWasmRegistered = Boolean(value);
+}
+
+export function isVtkWasmRegistered(): boolean {
+  return vtkWasmRegistered;
+}
 
 /**
  * Optional Volume3D `renderMode` override from `?renderMode=<mode>` (exact wire

@@ -15,6 +15,9 @@ import {
   utilities as csUtilities,
   registerWebGPURenderBackend,
   isWebGPURenderingAvailable,
+  registerVtkWasmRenderBackend,
+  isVtkWasmAvailable,
+  VTK_WASM_RENDER_BACKEND,
 } from '@cornerstonejs/core';
 import {
   cornerstoneStreamingImageVolumeLoader,
@@ -36,6 +39,8 @@ import {
   setViewportRenderingOverrides,
   resolveVolume3DRenderMode,
   setVolume3DRenderModeOverride,
+  setVtkWasmRegistered,
+  isVtkWasmRegistered,
 } from './utils/nextViewports';
 import interleaveCenterLoader from './utils/interleaveCenterLoader';
 import centerSequentialLoader from './utils/centerSequentialLoader';
@@ -73,7 +78,7 @@ export default async function init({
   // Note: this should run first before initializing the cornerstone
   // DO NOT CHANGE THE ORDER
 
-  // Stats overlay: appConfig.statsOverlay (dev/default enable it) or ?debug=true.
+  // Stats overlay: off by default; appConfig.statsOverlay or ?debug=true enable it.
   // Toggle at runtime with Ctrl+Shift+D.
   const statsOverlay =
     Boolean(appConfig.statsOverlay) ||
@@ -92,14 +97,27 @@ export default async function init({
     }
   }
 
+  // Experimental vtk.wasm (WebGL) planar + Volume3D backend. Optional peer;
+  // registration must not crash init when @kitware/vtk-wasm is absent.
+  setVtkWasmRegistered(false);
+  try {
+    if (await isVtkWasmAvailable()) {
+      await registerVtkWasmRenderBackend();
+      setVtkWasmRegistered(true);
+    }
+  } catch (error) {
+    console.warn('vtk.wasm backend registration failed:', error);
+    setVtkWasmRegistered(false);
+  }
+
   cornerstone.setUseCPURendering(Boolean(appConfig.useCPURendering));
 
   // All native ("next") Generic Viewport settings live under one config object:
-  // appConfig.genericViewports = { enabled, viewportRendering }.
+  // appConfig.genericViewports = { enabled, viewportRendering, renderMode }.
   const genericViewportsConfig = appConfig.genericViewports ?? {};
 
   // viewportRendering selects the render backend per-session:
-  // `?viewportRendering=cpu|webgl|webgpu|auto` for all viewports, plus
+  // `?viewportRendering=cpu|webgl|webgpu|vtkWasm|auto` for all viewports, plus
   // `?<viewportType>.viewportRendering=<backend>` (e.g.
   // `?orthographic.viewportRendering=cpu`) to override a single viewport type
   // via the per-mount renderBackend option. The global value maps to
@@ -109,17 +127,33 @@ export default async function init({
   const { renderBackend, renderBackendByViewportType } = resolveViewportRendering(
     genericViewportsConfig.viewportRendering
   );
-  if (renderBackend) {
-    if (renderBackend === 'cpu') {
+  // Prefer vtkWasm for planar MPR when registered and no explicit backend was chosen.
+  // If config/URL asked for vtkWasm but registration failed, fall back to gpu.
+  let effectiveRenderBackend =
+    renderBackend ??
+    (isVtkWasmRegistered() ? VTK_WASM_RENDER_BACKEND : undefined);
+  if (
+    effectiveRenderBackend === VTK_WASM_RENDER_BACKEND &&
+    !isVtkWasmRegistered()
+  ) {
+    console.warn(
+      'viewportRendering: vtkWasm requested but registration failed; falling back to gpu.'
+    );
+    effectiveRenderBackend = 'gpu';
+  }
+  if (effectiveRenderBackend) {
+    if (effectiveRenderBackend === 'cpu') {
       cornerstone.setUseCPURendering(true);
-    } else if (renderBackend === 'gpu') {
+    } else if (effectiveRenderBackend === 'gpu') {
       cornerstone.setUseCPURendering(false);
     }
     try {
-      cornerstone.setRenderBackend(renderBackend as cornerstone.RenderBackendValue);
+      cornerstone.setRenderBackend(
+        effectiveRenderBackend as cornerstone.RenderBackendValue
+      );
     } catch (error) {
       console.warn(
-        `viewportRendering: "${renderBackend}" is not a registered render backend; ` +
+        `viewportRendering: "${effectiveRenderBackend}" is not a registered render backend; ` +
           `keeping "${cornerstone.getRenderBackend()}".`,
         error
       );
@@ -127,10 +161,19 @@ export default async function init({
   }
   setViewportRenderingOverrides(renderBackendByViewportType);
 
+  let resolvedVolume3DMode = resolveVolume3DRenderMode(
+    (genericViewportsConfig as { renderMode?: unknown }).renderMode
+  );
+  if (resolvedVolume3DMode === 'vtkWasmVolume3d' && !isVtkWasmRegistered()) {
+    console.warn(
+      'renderMode: vtkWasmVolume3d requested but registration failed; falling back to vtkVolume3d.'
+    );
+    resolvedVolume3DMode = 'vtkVolume3d';
+  }
+  // Default Volume3D path: vtk-wasm when registered; otherwise config/URL or none.
   setVolume3DRenderModeOverride(
-    resolveVolume3DRenderMode(
-      (genericViewportsConfig as { renderMode?: unknown }).renderMode
-    )
+    resolvedVolume3DMode ??
+      (isVtkWasmRegistered() ? 'vtkWasmVolume3d' : undefined)
   );
 
   cornerstone.setConfiguration({
@@ -142,6 +185,16 @@ export default async function init({
       // paths while keeping the legacy public API via compatibility adapters.
       // No-op on cornerstone builds that predate the GenericViewport architecture.
       useGenericViewport: Boolean(appConfig.useGenericViewport),
+      // Same-origin vtk-wasm tar.gz (run `node scripts/fetch-vtk-wasm.mjs`).
+      // Tar embeds types/ → method table; directory-only load misses vtk-methods.json.
+      // webpackIgnore loader keeps blob glue import() native under Rspack.
+      vtkWasm: {
+        ...(cornerstone.getConfiguration().rendering?.vtkWasm ?? {}),
+        url:
+          (genericViewportsConfig as { vtkWasmUrl?: string }).vtkWasmUrl ??
+          '/vtk-wasm/vtk-wasm32-emscripten.tar.gz',
+        urlIsGzip: true,
+      },
     },
   });
 

@@ -7,6 +7,7 @@ import {
   isRegisteredRenderBackend,
   applyMviewVolume3DPreset,
   applySlicerLiveVolume3DPreset,
+  applyVtkWasmVolume3DPreset,
   SLICERLIVE_VOLUME_3D_RENDER_MODE,
 } from '@cornerstonejs/core';
 import type { RenderBackendValue } from '@cornerstonejs/core';
@@ -15,6 +16,7 @@ import { isVolume3DViewportType } from '../../../utils/getLegacyViewportType';
 import {
   getViewportRenderingOverride,
   getVolume3DRenderModeOverride,
+  isVtkWasmRegistered,
 } from '../../../utils/nextViewports';
 import { markSlicerLiveVolumeViewport } from '../../../utils/hydrateSlicerLiveSegOverlay';
 import type ViewportInfo from '../Viewport';
@@ -477,7 +479,11 @@ export class NextViewportBackend implements IViewportBackend {
     const renderModeOverride = getVolume3DRenderModeOverride();
     const volume3DRenderMode =
       renderModeOverride ??
-      (volumeRenderBackend === 'webgpu' ? 'webgpuVolume3d' : 'vtkVolume3d');
+      (volumeRenderBackend === 'webgpu'
+        ? 'webgpuVolume3d'
+        : isVtkWasmRegistered()
+          ? 'vtkWasmVolume3d'
+          : 'vtkVolume3d');
 
     if (is3D && volume3DRenderMode === SLICERLIVE_VOLUME_3D_RENDER_MODE) {
       markSlicerLiveVolumeViewport(viewport.id, true);
@@ -568,7 +574,8 @@ export class NextViewportBackend implements IViewportBackend {
         if (
           preset &&
           (applyMviewVolume3DPreset(nativeViewport.id, preset) ||
-            applySlicerLiveVolume3DPreset(nativeViewport.id, preset))
+            applySlicerLiveVolume3DPreset(nativeViewport.id, preset) ||
+            applyVtkWasmVolume3DPreset(nativeViewport.id, preset))
         ) {
           // applied (or stashed until scalars upload)
         } else if (preset) {

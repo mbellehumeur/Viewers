@@ -4,6 +4,7 @@ import {
   Types as CoreTypes,
   applyMviewVolume3DPreset,
   applySlicerLiveVolume3DPreset,
+  applyVtkWasmVolume3DPreset,
 } from '@cornerstonejs/core';
 import { getViewportAdapter } from '../adapter';
 import { legacyViewportOperations } from './LegacyViewportOperations';
@@ -153,7 +154,8 @@ export const nextViewportOperations: IViewportOperations = {
 
     if (
       applyMviewVolume3DPreset(viewport.id, presetObj) ||
-      applySlicerLiveVolume3DPreset(viewport.id, presetObj)
+      applySlicerLiveVolume3DPreset(viewport.id, presetObj) ||
+      applyVtkWasmVolume3DPreset(viewport.id, presetObj)
     ) {
       return;
     }
