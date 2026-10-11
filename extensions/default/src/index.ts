@@ -13,6 +13,7 @@ import getViewportModule from './getViewportModule';
 import { id } from './id';
 import preRegistration from './init';
 import { createReportDialogPrompt } from './Panels';
+import { createDicomLocalApi } from './DicomLocalDataSource/index';
 
 import { ContextMenuController, CustomizableContextMenuTypes } from './CustomizableContextMenu';
 import * as dicomWebUtils from './DicomWebDataSource/utils';
@@ -87,6 +88,7 @@ export {
   getStudiesForPatientByMRN,
   dicomWebUtils,
   createReportAsync,
+  createDicomLocalApi,
   StaticWadoClient,
   cleanDenaturalizedDataset,
   // Export all stores

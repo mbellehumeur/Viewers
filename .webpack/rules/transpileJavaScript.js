@@ -6,6 +6,8 @@ function transpileJavaScript(mode) {
       ? excludeNodeModulesExcept([
           // Workspace packages (needed for pnpm shamefully-hoist where they resolve through node_modules)
           '@ohif',
+          // Out-of-tree Slicer Hub packages (TS source, e.g. @slicer-hub/i18n)
+          '@slicer-hub',
           // 'dicomweb-client',
           // https://github.com/react-dnd/react-dnd/blob/master/babel.config.js
           'react-dnd',
@@ -19,7 +21,7 @@ function transpileJavaScript(mode) {
           // https://github.com/openlayers/openlayers#supported-browsers
           // 'ol', --> Should be fine
         ])
-      : excludeNodeModulesExcept([]);
+      : excludeNodeModulesExcept(['@slicer-hub']);
 
   return {
     // Include mjs, ts, tsx, js, and jsx files.

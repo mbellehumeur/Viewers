@@ -49,11 +49,20 @@ function ViewerHeader({ appConfig }: withAppTypes<{ appConfig: AppTypes.Config }
     'ohif.userPreferencesModal'
   ) as Types.MenuComponentCustomization;
 
+  // Slicer Hub header status (when appConfig.hub is set by config/hub.js).
+  const HubHeaderStatus = appConfig.hub
+    ? (customizationService.getCustomization('ohif.hubHeaderStatus') as
+        | React.ComponentType
+        | undefined)
+    : undefined;
+
   // Whatever fills the right side of the menu bar, in order: undo/redo then
   // patient info by default. Each item is rendered as a component, so it can
   // bring its own hooks, and reordering the list reorders the header.
-  const rightSideItems =
-    customizationService.getCustomization('ohif.headerRightSide')?.items ?? [];
+  const rightSideItems = [
+    ...(HubHeaderStatus ? [HubHeaderStatus] : []),
+    ...(customizationService.getCustomization('ohif.headerRightSide')?.items ?? []),
+  ];
 
   const menuOptions = [
     {

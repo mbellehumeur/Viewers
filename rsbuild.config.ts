@@ -288,7 +288,11 @@ export default defineConfig(({ env }) => {
         ...(writePluginImportsFile(SRC_DIR, DIST_DIR) || []),
         // Copy public directory except config and html-templates
         {
-          from: path.resolve(__dirname, 'node_modules/onnxruntime-web/dist'),
+          // Prefer @ohif/app's onnxruntime-web (FleXray needs ≥1.20).
+          from: path.resolve(
+            __dirname,
+            'platform/app/node_modules/onnxruntime-web/dist'
+          ),
           to: `${DIST_DIR}/ort`,
           force: true,
         },

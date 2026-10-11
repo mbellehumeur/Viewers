@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 
 // Shared module-resolution rules (alias + module search paths) used by BOTH
@@ -14,6 +15,74 @@ const path = require('path');
 // directory), so the values are identical regardless of which package's build
 // is doing the resolving.
 
+function resolveSlicerHubClientRoot() {
+  // Out-of-tree @slicer-hub/ohif-extension lives under SlicerHub-js-clients.
+  // With resolve.symlinks=true, rspack resolves from that real path and often
+  // fails to find the app-linked @slicer-hub/client via node_modules walk-up.
+  // Prefer the sibling checkout real path (avoids Windows symlink + file-alias
+  // issues); fall back to the app-linked package. Alias the package root so
+  // package.json exports/mainFields apply (not a direct dist file path).
+  const candidates = [
+    path.resolve(__dirname, '../../SlicerHub-js-clients/packages/client'),
+    path.resolve(__dirname, '../platform/app/node_modules/@slicer-hub/client'),
+  ];
+  for (const root of candidates) {
+    try {
+      const realRoot = fs.realpathSync(root);
+      const entry = path.join(realRoot, 'dist', 'hub-client.js');
+      if (fs.existsSync(entry)) {
+        return realRoot;
+      }
+    } catch {
+      // candidate missing or not resolvable
+    }
+  }
+  return null;
+}
+
+function resolveSlicerHubFlexrayWebRoot() {
+  const candidates = [
+    path.resolve(__dirname, '../../SlicerHub-js-clients/packages/flexray-web'),
+    path.resolve(
+      __dirname,
+      '../platform/app/node_modules/@slicer-hub/flexray-web'
+    ),
+  ];
+  for (const root of candidates) {
+    try {
+      const realRoot = fs.realpathSync(root);
+      if (fs.existsSync(path.join(realRoot, 'src', 'index.js'))) {
+        return realRoot;
+      }
+    } catch {
+      // skip
+    }
+  }
+  return null;
+}
+
+function resolveSlicerHubI18nRoot() {
+  const candidates = [
+    path.resolve(__dirname, '../../SlicerHub-js-clients/packages/i18n'),
+    path.resolve(__dirname, '../platform/app/node_modules/@slicer-hub/i18n'),
+  ];
+  for (const root of candidates) {
+    try {
+      const realRoot = fs.realpathSync(root);
+      if (fs.existsSync(path.join(realRoot, 'index.ts'))) {
+        return realRoot;
+      }
+    } catch {
+      // skip
+    }
+  }
+  return null;
+}
+
+const slicerHubClientRoot = resolveSlicerHubClientRoot();
+const slicerHubFlexrayWebRoot = resolveSlicerHubFlexrayWebRoot();
+const slicerHubI18nRoot = resolveSlicerHubI18nRoot();
+
 const alias = {
   // Some extensions import app-level utilities (e.g. history,
   // preserveQueryParameters) from '@ohif/app'. pnpm's isolated layout does not
@@ -26,6 +95,36 @@ const alias = {
   '@hooks': path.resolve(__dirname, '../platform/app/src/hooks'),
   '@routes': path.resolve(__dirname, '../platform/app/src/routes'),
   '@state': path.resolve(__dirname, '../platform/app/src/state'),
+  ...(slicerHubClientRoot
+    ? {
+        // Point at the built ESM entry. Aliasing the package root fails in
+        // rspack for out-of-tree linked packages ("matched aliased key" but
+        // package exports are not applied).
+        '@slicer-hub/client$': path.join(
+          slicerHubClientRoot,
+          'dist',
+          'hub-client.js'
+        ),
+      }
+    : {}),
+  ...(slicerHubFlexrayWebRoot
+    ? {
+        '@slicer-hub/flexray-web$': path.join(
+          slicerHubFlexrayWebRoot,
+          'src',
+          'index.js'
+        ),
+      }
+    : {}),
+  ...(slicerHubI18nRoot
+    ? {
+        // Alias both exact ($) and bare forms: rspack sometimes skips `$`
+        // when resolving from out-of-tree linked packages, which then hits a
+        // nested node_modules copy that babel excludes.
+        '@slicer-hub/i18n$': path.join(slicerHubI18nRoot, 'index.ts'),
+        '@slicer-hub/i18n': path.join(slicerHubI18nRoot, 'index.ts'),
+      }
+    : {}),
 };
 
 // Directories to search when resolving modules. The leading bare 'node_modules'

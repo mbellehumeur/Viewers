@@ -155,6 +155,10 @@ const createRoutes = ({
     // history.navigate() from a command, well after mount.
     React.useEffect(() => {
       history.navigate = navigate;
+      // Window bridge so linked extensions (duplicate @ohif/app module copies)
+      // can SPA-navigate without a full page reload.
+      (window as Window & { __OHIF_NAVIGATE__?: typeof navigate }).__OHIF_NAVIGATE__ =
+        navigate;
     }, [navigate]);
 
     // eslint-disable-next-line react/jsx-props-no-spreading

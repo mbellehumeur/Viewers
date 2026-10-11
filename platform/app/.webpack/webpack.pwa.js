@@ -110,7 +110,12 @@ module.exports = (env, argv) => {
             },
           },
           {
-            from: '../../../node_modules/onnxruntime-web/dist',
+            // Prefer @ohif/app's onnxruntime-web (FleXray needs ≥1.20 for fp16 /
+            // WebGPU). Root may still hoist 1.17 via @cornerstonejs/ai.
+            from: path.resolve(
+              __dirname,
+              '../node_modules/onnxruntime-web/dist'
+            ),
             to: `${DIST_DIR}/ort`,
           },
           {

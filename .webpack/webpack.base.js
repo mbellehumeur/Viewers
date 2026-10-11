@@ -120,7 +120,9 @@ module.exports = (env, argv, { SRC_DIR, ENTRY }) => {
                 ? [
                     {
                       test: /\.[jt]sx?$/,
-                      exclude: /node_modules/,
+                      // Transpile linked @slicer-hub packages (TS source under
+                      // nested node_modules, e.g. @slicer-hub/i18n).
+                      exclude: /node_modules[\\/](?!@slicer-hub(?:[\\/]|$))/,
                       loader: 'babel-loader',
                       options: {
                         // Rely on the root babel.config.js (preset-env,
@@ -140,7 +142,9 @@ module.exports = (env, argv, { SRC_DIR, ENTRY }) => {
                 : [
                     {
                       test: /\.[jt]sx?$/,
-                      exclude: /node_modules/,
+                      // Transpile linked @slicer-hub packages (TS source under
+                      // nested node_modules, e.g. @slicer-hub/i18n).
+                      exclude: /node_modules[\\/](?!@slicer-hub(?:[\\/]|$))/,
                       loader: 'babel-loader',
                       options: {
                         plugins: isProdBuild ? [] : ['react-refresh/babel'],

@@ -8,6 +8,10 @@
       "version": "3.0.0"
     },
     {
+      "packageName": "@slicer-hub/ohif-extension",
+      "version": "0.1.0"
+    },
+    {
       "packageName": "@ohif/extension-measurement-tracking",
       "default": false,
       "version": "3.0.0"
