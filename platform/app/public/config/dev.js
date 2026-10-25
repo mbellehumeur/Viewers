@@ -46,6 +46,15 @@ window.config = {
     prefetch: 25,
   },
   showErrorDetails: 'always', // 'always', 'dev', 'production'
+
+  // @ohif/extension-download-manager
+  aquestDownloadManager: {
+    enabled: true,
+    devMode: false,
+    maxParallel: 3,
+    preferFolderWriter: false,
+    retryCount: 1,
+  },
   // filterQueryParam: false,
   // Defines multi-monitor layouts
   multimonitor: [

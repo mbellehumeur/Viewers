@@ -12,6 +12,10 @@
       "version": "0.1.0"
     },
     {
+      "packageName": "@ohif/extension-download-manager",
+      "version": "3.14.0"
+    },
+    {
       "packageName": "@ohif/extension-measurement-tracking",
       "default": false,
       "version": "3.0.0"

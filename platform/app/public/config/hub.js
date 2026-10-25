@@ -68,6 +68,15 @@ window.config = {
     // filterQueryParam: false,
     measurementTrackingMode: 'simplified',
 
+    // @ohif/extension-download-manager (linked from ../OHIF-download-manager)
+    aquestDownloadManager: {
+      enabled: true,
+      devMode: false,
+      maxParallel: 3,
+      preferFolderWriter: false,
+      retryCount: 1,
+    },
+
     hub: {
       defaultHubName: 'SLICER-HUB-CLOUD',
 
@@ -455,6 +464,10 @@ window.config = {
             { id: 'WindowLevel', inheritsFrom: 'ohif.overlayItem.windowLevel' },
             { id: 'ZoomLevel', inheritsFrom: 'ohif.overlayItem.zoomLevel' },
           ],
+        },
+        // Default study browser tab to Primary (URL study only), not All/priors.
+        'studyBrowser.studyMode': {
+          $set: 'primary',
         },
       },
     ],
