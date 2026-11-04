@@ -254,11 +254,13 @@ export default function getToolbarModule({ servicesManager, extensionManager }: 
 
         // Next Volume3D exposes getActiveRenderMode; legacy Volume3D does not,
         // but the menu still offers Legacy ↔ next reload switching.
+        // MPR / orthographic volume panes use planar renderBackend switching.
         const isNextVolume3D = typeof viewport.getActiveRenderMode === 'function';
         const isLegacyVolume3D =
           !isNextViewportsEnabled() && viewport.type === csEnums.ViewportType.VOLUME_3D;
+        const isMprVolume = isVolumeRenderingViewport(viewport);
 
-        if (!isNextVolume3D && !isLegacyVolume3D) {
+        if (!isNextVolume3D && !isLegacyVolume3D && !isMprVolume) {
           return {
             disabled: true,
           };

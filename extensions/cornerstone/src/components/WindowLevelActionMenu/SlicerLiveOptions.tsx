@@ -5,13 +5,14 @@ import {
   getSlicerLiveVolume3DAutoSampleStep,
   getSlicerLiveVolume3DSampleStep,
   getSlicerLiveVolume3DSettleSamples,
-  getSlicerLiveVolume3DTargetMs,
+  getSlicerLiveVolume3DTargetFps,
 } from '@cornerstonejs/core';
-import { Numeric, Switch, ToggleGroup, ToggleGroupItem } from '@ohif/ui-next';
+import { Numeric, Switch } from '@ohif/ui-next';
 import { useSystem } from '@ohif/core';
 import { useTranslation } from 'react-i18next';
 
-const TARGET_MS_OPTIONS = [8, 16, 33] as const;
+const TARGET_FPS_MAX = 120;
+const DEFAULT_TARGET_FPS = 30;
 const DEFAULT_SETTLE_SAMPLES = 32;
 
 function sectionHeader(label: string): ReactElement {
@@ -38,10 +39,10 @@ export function SlicerLiveOptions({
   const { commandsManager } = useSystem();
   const isSlicerLive = Boolean(viewportId && getSlicerLiveVolume3D(viewportId));
 
-  const [targetMs, setTargetMs] = useState(() =>
+  const [targetFps, setTargetFps] = useState(() =>
     viewportId && isSlicerLive
-      ? (getSlicerLiveVolume3DTargetMs(viewportId) ?? 16)
-      : 16
+      ? (getSlicerLiveVolume3DTargetFps(viewportId) ?? DEFAULT_TARGET_FPS)
+      : DEFAULT_TARGET_FPS
   );
   const autoSampleStep =
     (viewportId && isSlicerLive
@@ -67,7 +68,7 @@ export function SlicerLiveOptions({
     if (!viewportId || !isSlicerLive) {
       return;
     }
-    setTargetMs(getSlicerLiveVolume3DTargetMs(viewportId) ?? 16);
+    setTargetFps(getSlicerLiveVolume3DTargetFps(viewportId) ?? DEFAULT_TARGET_FPS);
     setSampleStep(
       getSlicerLiveVolume3DSampleStep(viewportId) ??
         getSlicerLiveVolume3DAutoSampleStep(viewportId) ??
@@ -88,16 +89,17 @@ export function SlicerLiveOptions({
     };
   }, [autoSampleStep]);
 
-  const onTargetMs = useCallback(
-    (next: string) => {
-      if (!viewportId || !next) {
+  const onTargetFps = useCallback(
+    (value: number | [number, number]) => {
+      if (!viewportId) {
         return;
       }
-      const ms = Number(next);
-      setTargetMs(ms);
-      commandsManager.runCommand('setSlicerLiveVolumeTargetMs', {
+      const raw = Array.isArray(value) ? value[0] : value;
+      const fps = Math.max(1, Math.round(raw));
+      setTargetFps(fps);
+      commandsManager.runCommand('setSlicerLiveVolumeTargetFps', {
         viewportId,
-        targetMs: ms,
+        fps,
       });
     },
     [commandsManager, viewportId]
@@ -171,25 +173,23 @@ export function SlicerLiveOptions({
       </div>
 
       {sectionHeader(t('Motion'))}
-      <div className="mb-2 flex w-full flex-col gap-1 px-2">
-        <div className="text-muted-foreground text-sm">{t('Target ms')}</div>
-        <ToggleGroup
-          type="single"
-          value={String(targetMs)}
-          onValueChange={onTargetMs}
-          className="grid w-full grid-cols-3 gap-1"
+      <div className="my-1 w-full pl-2 pr-1">
+        <Numeric.Container
+          mode="singleRange"
+          min={1}
+          max={TARGET_FPS_MAX}
+          step={1}
+          value={Math.round(targetFps)}
+          onChange={onTargetFps}
         >
-          {TARGET_MS_OPTIONS.map(ms => (
-            <ToggleGroupItem
-              key={ms}
-              value={String(ms)}
-              size="sm"
-              className="px-1 text-xs"
-            >
-              {ms}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+          <div className="flex flex-row items-center">
+            <Numeric.Label className="w-24">{t('Target FPS')}</Numeric.Label>
+            <Numeric.SingleRange sliderClassName="mx-2 flex-grow" />
+          </div>
+          <div className="text-muted-foreground mt-1 px-2 text-xs">
+            {Math.round(targetFps)}
+          </div>
+        </Numeric.Container>
       </div>
 
       {sectionHeader(t('Settle'))}

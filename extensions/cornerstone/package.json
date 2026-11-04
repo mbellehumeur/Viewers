@@ -62,6 +62,7 @@
     "@icr/polyseg-wasm": "0.4.0",
     "@itk-wasm/morphological-contour-interpolation": "1.1.0",
     "@kitware/vtk.js": "35.5.3",
+    "@mview/webgpu-volume-standalone": "file:../../../mview-webgpu-volume-lab/mview-webgpu-volume-core",
     "html2canvas": "1.4.1",
     "immutability-helper": "3.1.1",
     "lodash.compact": "3.0.1",

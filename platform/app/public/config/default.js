@@ -40,15 +40,21 @@ window.config = {
     default: './customizations/',
   },
 
-  // Native GenericViewport with WebGPU render backend (local cs3d WebGPU branch).
-  // Override per-session: ?useNextViewports=false or ?viewportRendering=webgl
-  // Volume3D default: mview; override with ?renderMode=slicerLiveVolume3d etc.
+  // Next GenericViewport lane on by default with vtk-wasm for Volume3D + MPR.
+  // Falls back at init when @kitware/vtk-wasm is missing (vtkVolume3d / gpu).
+  // Override per-session: ?useNextViewports=false, ?renderMode=vtkVolume3d,
+  // ?viewportRendering=gpu, etc.
+  // Same-origin WASM assets: `node scripts/fetch-vtk-wasm.mjs`
+  // → public/vtk-wasm/{jspi,compat}/. Runtime picks by WebAssembly.Suspending.
   genericViewports: {
     enabled: true,
-    renderMode: 'mviewVolume3d',
+    renderMode: 'vtkWasmVolume3d',
+    viewportRendering: 'vtkWasm',
+    vtkWasmJspiUrl: '/vtk-wasm/jspi/vtk-wasm32-emscripten.tar.gz',
+    vtkWasmCompatUrl: '/vtk-wasm/compat/vtk-9.7.0-wasm32-emscripten.tar.gz',
   },
 
-  // Stats / Target FPS / Max textures HUD (Ctrl+Shift+D to toggle).
+  // Stats / Target FPS / Max textures HUD — on by default; Ctrl+Shift+D to toggle.
   statsOverlay: true,
 
   showStudyList: true,

@@ -188,6 +188,7 @@ const VOLUME_3D_RENDER_MODES = new Set([
   'mviewVolume3d',
   'slicerLiveVolume3d',
   'vtkWasmVolume3d',
+  'vtkWasmWebgpuVolume3d',
   'vtkGeometry3d',
 ]);
 
@@ -203,6 +204,20 @@ export function setVtkWasmRegistered(value: boolean): void {
 
 export function isVtkWasmRegistered(): boolean {
   return vtkWasmRegistered;
+}
+
+/**
+ * Whether vtk-wasm WebGPU load probe succeeded this session.
+ * Used for corner-menu visibility of next-vtk-wasm (WebGPU).
+ */
+let vtkWasmWebgpuRegistered = false;
+
+export function setVtkWasmWebgpuRegistered(value: boolean): void {
+  vtkWasmWebgpuRegistered = Boolean(value);
+}
+
+export function isVtkWasmWebgpuRegistered(): boolean {
+  return vtkWasmWebgpuRegistered;
 }
 
 /**

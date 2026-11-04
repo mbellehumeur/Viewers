@@ -1,5 +1,5 @@
 import React from 'react';
-import { Enums } from '@cornerstonejs/core';
+import { Enums, getEffectiveRenderBackend } from '@cornerstonejs/core';
 import { cn, useIconPresentation } from '@ohif/ui-next';
 import { useSystem } from '@ohif/core';
 import { Popover, PopoverTrigger, PopoverContent, Button, Icons } from '@ohif/ui-next';
@@ -7,38 +7,90 @@ import {
   getVolume3DRenderModeOverride,
   isNextViewportsEnabled,
   isVtkWasmRegistered,
+  isVtkWasmWebgpuRegistered,
 } from '../../utils/nextViewports';
+import VtkWasmBrickingSubMenu from './VtkWasmBrickingSubMenu';
+
+type VtkWasmBrickPresetId = 'minimal' | '2x2x2' | '4x4x4' | '8x8x8';
 
 const LEGACY_MODE = 'legacy';
 
-/** Base selectable modes shown in the corner menu popover. */
-const BASE_RENDER_MODES: { value: string; label: string }[] = [
-  { value: LEGACY_MODE, label: 'vtk (WebGL)' },
-  { value: 'vtkVolume3d', label: 'next-vtk (WebGL)' },
+/** Base selectable modes shown in the Volume3D corner menu popover. */
+const BASE_VOLUME3D_RENDER_MODES: { value: string; label: string }[] = [
+  { value: LEGACY_MODE, label: 'vtk-js (WebGL)' },
+  { value: 'vtkVolume3d', label: 'next-vtk-js (WebGL)' },
   { value: 'mviewVolume3d', label: 'next-mview (WebGPU)' },
+  { value: 'slicerLiveVolume3d', label: 'next-slicerLive (WebGPU)' },
 ];
 
-/** Labels for known modes, including URL-only overrides not in the menu. */
+/** Base selectable backends shown in the MPR / planar corner menu popover. */
+const BASE_PLANAR_RENDER_BACKENDS: { value: string; label: string }[] = [
+  { value: LEGACY_MODE, label: 'vtk-js (WebGL)' },
+  { value: 'gpu', label: 'next-vtk-js (WebGL)' },
+];
+
+/** Labels for known modes/backends, including URL-only overrides not in the menu. */
 const MODE_LABELS: Record<string, string> = {
-  [LEGACY_MODE]: 'vtk (WebGL)',
-  vtkVolume3d: 'next-vtk (WebGL)',
+  [LEGACY_MODE]: 'vtk-js (WebGL)',
+  vtkVolume3d: 'next-vtk-js (WebGL)',
   vtkWasmVolume3d: 'next-vtk-wasm (WebGL)',
+  vtkWasmWebgpuVolume3d: 'next-vtk-wasm (WebGPU)',
   mviewVolume3d: 'next-mview (WebGPU)',
-  slicerLiveVolume3d: 'slicerLive (WebGPU)',
+  slicerLiveVolume3d: 'next-slicerLive (WebGPU)',
+  gpu: 'next-vtk-js (WebGL)',
+  webgl: 'next-vtk-js (WebGL)',
+  vtkWasm: 'next-vtk-wasm (WebGL)',
+  cpu: 'next-cpu',
+  auto: 'next-auto',
+  webgpu: 'next-webgpu',
 };
 
-const NEXT_PATH_MODES = new Set([
-  ...BASE_RENDER_MODES.map(m => m.value).filter(v => v !== LEGACY_MODE),
+const NEXT_VOLUME3D_PATH_MODES = new Set([
+  ...BASE_VOLUME3D_RENDER_MODES.map(m => m.value).filter(v => v !== LEGACY_MODE),
   'vtkWasmVolume3d',
-  'slicerLiveVolume3d',
+  'vtkWasmWebgpuVolume3d',
 ]);
 
-function getMenuRenderModes(): { value: string; label: string }[] {
-  const modes = [...BASE_RENDER_MODES];
+function isVolume3DViewport(
+  viewport: { type?: string; getActiveRenderMode?: () => string } | null | undefined
+): boolean {
+  if (!viewport) {
+    return false;
+  }
+  if (typeof viewport.getActiveRenderMode === 'function') {
+    return true;
+  }
+  return (
+    viewport.type === Enums.ViewportType.VOLUME_3D ||
+    viewport.type === Enums.ViewportType.VOLUME_3D_NEXT
+  );
+}
+
+function getVolume3DMenuRenderModes(): { value: string; label: string }[] {
+  const modes = [...BASE_VOLUME3D_RENDER_MODES];
   // Omit when wasm failed to register so the menu has no dead entries.
+  let insertAt = 2;
   if (isVtkWasmRegistered()) {
-    modes.splice(2, 0, {
+    modes.splice(insertAt, 0, {
       value: 'vtkWasmVolume3d',
+      label: 'next-vtk-wasm (WebGL)',
+    });
+    insertAt += 1;
+  }
+  if (isVtkWasmWebgpuRegistered()) {
+    modes.splice(insertAt, 0, {
+      value: 'vtkWasmWebgpuVolume3d',
+      label: 'next-vtk-wasm (WebGPU)',
+    });
+  }
+  return modes;
+}
+
+function getPlanarMenuRenderBackends(): { value: string; label: string }[] {
+  const modes = [...BASE_PLANAR_RENDER_BACKENDS];
+  if (isVtkWasmRegistered()) {
+    modes.push({
+      value: 'vtkWasm',
       label: 'next-vtk-wasm (WebGL)',
     });
   }
@@ -52,7 +104,7 @@ function labelForMode(mode: string | undefined): string {
   return MODE_LABELS[mode] ?? 'Render';
 }
 
-function readRenderMode(
+function readVolume3DRenderMode(
   viewport: { getActiveRenderMode?: () => string } | null | undefined
 ): string | undefined {
   if (!isNextViewportsEnabled()) {
@@ -61,11 +113,25 @@ function readRenderMode(
   // Override is set synchronously on switch; prefer it so the trigger updates
   // before setDisplaySets finishes remounting.
   const mode = getVolume3DRenderModeOverride() ?? viewport?.getActiveRenderMode?.();
-  if (mode && NEXT_PATH_MODES.has(mode)) {
+  if (mode && NEXT_VOLUME3D_PATH_MODES.has(mode)) {
     return mode;
   }
   // Unknown next paths (e.g. leftover webgpu URL) still show a label.
   return mode;
+}
+
+function readPlanarRenderBackend(): string | undefined {
+  if (!isNextViewportsEnabled()) {
+    return LEGACY_MODE;
+  }
+  return getEffectiveRenderBackend();
+}
+
+function isVtkWasmWebglMode(mode: string | undefined, isVolume3D: boolean): boolean {
+  if (!mode) {
+    return false;
+  }
+  return isVolume3D ? mode === 'vtkWasmVolume3d' : mode === 'vtkWasm';
 }
 
 function ViewportRenderModeMenu({
@@ -90,19 +156,27 @@ function ViewportRenderModeMenu({
 
   const getViewport = React.useCallback(() => {
     return cornerstoneViewportService.getCornerstoneViewport(viewportId) as
-      | { getActiveRenderMode?: () => string; element?: HTMLElement }
+      | { type?: string; getActiveRenderMode?: () => string; element?: HTMLElement }
       | null
       | undefined;
   }, [cornerstoneViewportService, viewportId]);
 
-  const [currentMode, setCurrentMode] = React.useState<string | undefined>(() =>
-    readRenderMode(getViewport())
-  );
+  const isVolume3D = isVolume3DViewport(getViewport());
+
+  const readCurrentMode = React.useCallback(() => {
+    const viewport = getViewport();
+    return isVolume3DViewport(viewport)
+      ? readVolume3DRenderMode(viewport)
+      : readPlanarRenderBackend();
+  }, [getViewport]);
+
+  const [currentMode, setCurrentMode] = React.useState<string | undefined>(() => readCurrentMode());
+  const [panel, setPanel] = React.useState<'renderMode' | 'bricking'>('renderMode');
 
   const syncFromViewport = React.useCallback(() => {
-    const nextMode = readRenderMode(getViewport());
+    const nextMode = readCurrentMode();
     setCurrentMode(prev => (prev === nextMode ? prev : nextMode));
-  }, [getViewport]);
+  }, [readCurrentMode]);
 
   // Keep the trigger in sync after remount / render (same pattern as overlay badge).
   React.useEffect(() => {
@@ -133,6 +207,7 @@ function ViewportRenderModeMenu({
     }
 
     const onNext = isNextViewportsEnabled();
+    const volume3D = isVolume3DViewport(getViewport());
 
     // Legacy ↔ next: soft remount (flip session lane + remount viewports).
     if (mode === LEGACY_MODE) {
@@ -148,34 +223,62 @@ function ViewportRenderModeMenu({
     if (!onNext) {
       setCurrentMode(mode);
       onClose?.();
-      await commandsManager.runCommand('setViewportBackendLane', {
-        useNextViewports: true,
-        renderMode: mode,
-      });
+      if (volume3D) {
+        await commandsManager.runCommand('setViewportBackendLane', {
+          useNextViewports: true,
+          renderMode: mode,
+        });
+      } else {
+        await commandsManager.runCommand('setViewportBackendLane', {
+          useNextViewports: true,
+        });
+        await commandsManager.runCommand('setPlanarRenderBackend', {
+          backend: mode,
+        });
+      }
       syncFromViewport();
       return;
     }
 
-    // Already on next: hot-switch Volume3D render path only.
     setCurrentMode(mode);
     onClose?.();
-    await commandsManager.runCommand('setVolume3DRenderMode', {
-      viewportId,
-      mode,
-    });
+    if (volume3D) {
+      await commandsManager.runCommand('setVolume3DRenderMode', {
+        viewportId,
+        mode,
+      });
+    } else {
+      await commandsManager.runCommand('setPlanarRenderBackend', {
+        backend: mode,
+      });
+    }
     syncFromViewport();
   };
 
   const handleOpenChange = (openState: boolean) => {
     if (openState) {
+      setPanel('renderMode');
       onOpen?.();
     } else {
       onClose?.();
     }
   };
 
+  const handleBrickingSelect = async (preset: VtkWasmBrickPresetId) => {
+    onClose?.();
+    setPanel('renderMode');
+    await commandsManager.runCommand('setVtkWasmBrickPreset', {
+      viewportId,
+      preset,
+    });
+    syncFromViewport();
+  };
+
   const { align, side } = toolbarService.getAlignAndSide(Number(location));
   const triggerLabel = labelForMode(currentMode);
+  const menuItems = isVolume3D ? getVolume3DMenuRenderModes() : getPlanarMenuRenderBackends();
+  const showBrickingSubMenu = isVtkWasmWebglMode(currentMode, isVolume3D);
+  const brickingPath = isVolume3D ? 'volume3d' : 'mpr';
 
   // Avoid spreading a static toolbar `label` that would override the live mode name.
   const { label: _ignoredLabel, icon: _ignoredIcon, ...restProps } = props as {
@@ -231,21 +334,51 @@ function ViewportRenderModeMenu({
         side={side}
         collisionPadding={8}
       >
-        {getMenuRenderModes().map(({ value, label }) => (
-          <Button
-            key={value}
-            variant="ghost"
-            className="flex h-8 w-full flex-shrink-0 items-center justify-start self-stretch px-1 py-0 text-sm"
-            onClick={() => {
-              void handleModeChange(value);
+        {panel === 'bricking' ? (
+          <VtkWasmBrickingSubMenu
+            path={brickingPath}
+            onBack={() => {
+              setPanel('renderMode');
             }}
-          >
-            <div className="mr-1 flex w-6 items-center justify-start">
-              {currentMode === value ? <Icons.Checked className="text-primary h-5 w-5" /> : null}
-            </div>
-            <div className="flex-1 text-left">{label}</div>
-          </Button>
-        ))}
+            onSelect={preset => {
+              void handleBrickingSelect(preset);
+            }}
+          />
+        ) : (
+          <>
+            {menuItems.map(({ value, label }) => (
+              <Button
+                key={value}
+                variant="ghost"
+                className="flex h-8 w-full flex-shrink-0 items-center justify-start self-stretch px-1 py-0 text-sm"
+                onClick={() => {
+                  void handleModeChange(value);
+                }}
+              >
+                <div className="mr-1 flex w-6 items-center justify-start">
+                  {currentMode === value ? <Icons.Checked className="text-primary h-5 w-5" /> : null}
+                </div>
+                <div className="flex-1 text-left">{label}</div>
+              </Button>
+            ))}
+            {showBrickingSubMenu ? (
+              <>
+                <div className="bg-border my-1 h-px w-full" />
+                <Button
+                  variant="ghost"
+                  className="flex h-8 w-full flex-shrink-0 items-center justify-start self-stretch px-1 py-0 text-sm"
+                  onClick={() => {
+                    setPanel('bricking');
+                  }}
+                >
+                  <div className="mr-1 flex w-6 items-center justify-start" />
+                  <div className="flex-1 text-left">Bricking</div>
+                  <Icons.ChevronRight className="text-muted-foreground h-4 w-4" />
+                </Button>
+              </>
+            ) : null}
+          </>
+        )}
       </PopoverContent>
     </Popover>
   );

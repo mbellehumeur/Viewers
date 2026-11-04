@@ -14,6 +14,7 @@ import { getViewportDataShapeType } from '../../utils/viewportDataShape';
 
 import './CustomizableViewportOverlay.css';
 import { useViewportRendering } from '../../hooks';
+import VtkWasmBrickOverlayItem from './VtkWasmBrickOverlayItem';
 
 const EPSILON = 1e-4;
 const { formatPN, formatValue } = utils;
@@ -49,6 +50,7 @@ const OverlayItemComponents = {
   'ohif.overlayItem.windowLevel': VOIOverlayItem,
   'ohif.overlayItem.zoomLevel': ZoomOverlayItem,
   'ohif.overlayItem.instanceNumber': InstanceNumberOverlayItem,
+  'ohif.overlayItem.vtkWasmBricks': VtkWasmBrickOverlayItem,
 };
 
 /**

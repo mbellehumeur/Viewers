@@ -17,6 +17,7 @@ import {
   isWebGPURenderingAvailable,
   registerVtkWasmRenderBackend,
   isVtkWasmAvailable,
+  isVtkWasmWebgpuAvailable,
   VTK_WASM_RENDER_BACKEND,
 } from '@cornerstonejs/core';
 import {
@@ -40,7 +41,9 @@ import {
   resolveVolume3DRenderMode,
   setVolume3DRenderModeOverride,
   setVtkWasmRegistered,
+  setVtkWasmWebgpuRegistered,
   isVtkWasmRegistered,
+  isVtkWasmWebgpuRegistered,
 } from './utils/nextViewports';
 import interleaveCenterLoader from './utils/interleaveCenterLoader';
 import centerSequentialLoader from './utils/centerSequentialLoader';
@@ -78,7 +81,7 @@ export default async function init({
   // Note: this should run first before initializing the cornerstone
   // DO NOT CHANGE THE ORDER
 
-  // Stats overlay: off by default; appConfig.statsOverlay or ?debug=true enable it.
+  // Stats overlay: on when appConfig.statsOverlay is true, or ?debug=true.
   // Toggle at runtime with Ctrl+Shift+D.
   const statsOverlay =
     Boolean(appConfig.statsOverlay) ||
@@ -100,14 +103,24 @@ export default async function init({
   // Experimental vtk.wasm (WebGL) planar + Volume3D backend. Optional peer;
   // registration must not crash init when @kitware/vtk-wasm is absent.
   setVtkWasmRegistered(false);
+  setVtkWasmWebgpuRegistered(false);
   try {
     if (await isVtkWasmAvailable()) {
       await registerVtkWasmRenderBackend();
       setVtkWasmRegistered(true);
+      try {
+        if (await isVtkWasmWebgpuAvailable()) {
+          setVtkWasmWebgpuRegistered(true);
+        }
+      } catch (error) {
+        console.warn('vtk.wasm WebGPU probe failed:', error);
+        setVtkWasmWebgpuRegistered(false);
+      }
     }
   } catch (error) {
     console.warn('vtk.wasm backend registration failed:', error);
     setVtkWasmRegistered(false);
+    setVtkWasmWebgpuRegistered(false);
   }
 
   cornerstone.setUseCPURendering(Boolean(appConfig.useCPURendering));
@@ -170,6 +183,19 @@ export default async function init({
     );
     resolvedVolume3DMode = 'vtkVolume3d';
   }
+  if (
+    resolvedVolume3DMode === 'vtkWasmWebgpuVolume3d' &&
+    !isVtkWasmWebgpuRegistered()
+  ) {
+    console.warn(
+      'renderMode: vtkWasmWebgpuVolume3d requested but WebGPU probe failed; falling back to ' +
+        (isVtkWasmRegistered() ? 'vtkWasmVolume3d' : 'vtkVolume3d') +
+        '.'
+    );
+    resolvedVolume3DMode = isVtkWasmRegistered()
+      ? 'vtkWasmVolume3d'
+      : 'vtkVolume3d';
+  }
   // Default Volume3D path: vtk-wasm when registered; otherwise config/URL or none.
   setVolume3DRenderModeOverride(
     resolvedVolume3DMode ??
@@ -185,16 +211,39 @@ export default async function init({
       // paths while keeping the legacy public API via compatibility adapters.
       // No-op on cornerstone builds that predate the GenericViewport architecture.
       useGenericViewport: Boolean(appConfig.useGenericViewport),
-      // Same-origin vtk-wasm tar.gz (run `node scripts/fetch-vtk-wasm.mjs`).
-      // Tar embeds types/ → method table; directory-only load misses vtk-methods.json.
-      // webpackIgnore loader keeps blob glue import() native under Rspack.
-      vtkWasm: {
-        ...(cornerstone.getConfiguration().rendering?.vtkWasm ?? {}),
-        url:
-          (genericViewportsConfig as { vtkWasmUrl?: string }).vtkWasmUrl ??
-          '/vtk-wasm/vtk-wasm32-emscripten.tar.gz',
-        urlIsGzip: true,
-      },
+  // Same-origin vtk-wasm tars (run `node scripts/fetch-vtk-wasm.mjs`).
+  // JSPI browsers load jspi/ (Kitware latest); non-JSPI (iOS Safari) load
+  // compat/ (9.7.0 sync). Dual URLs beat a single vtkWasmUrl pointing at latest.
+  // webpackIgnore loader keeps blob glue import() native under Rspack.
+  vtkWasm: {
+    ...(cornerstone.getConfiguration().rendering?.vtkWasm ?? {}),
+    ...(() => {
+      const gv = genericViewportsConfig as {
+        vtkWasmUrl?: string;
+        vtkWasmJspiUrl?: string;
+        vtkWasmCompatUrl?: string;
+      };
+      if (gv.vtkWasmUrl) {
+        return { url: gv.vtkWasmUrl };
+      }
+      return {
+        jspiUrl:
+          gv.vtkWasmJspiUrl ?? '/vtk-wasm/jspi/vtk-wasm32-emscripten.tar.gz',
+        compatUrl:
+          gv.vtkWasmCompatUrl ??
+          '/vtk-wasm/compat/vtk-9.7.0-wasm32-emscripten.tar.gz',
+      };
+    })(),
+    urlIsGzip: true,
+    volumeTextureBrickling: true,
+    brickPartitions: {
+      strategy: 'minimum',
+    },
+    brickPartitionsMpr: {
+      strategy: 'fixed',
+      partitions: [8, 8, 8],
+    },
+  },
     },
   });
 

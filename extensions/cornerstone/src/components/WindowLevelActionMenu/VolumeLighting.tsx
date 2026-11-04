@@ -4,7 +4,10 @@ import { Numeric } from '@ohif/ui-next';
 import { useSystem } from '@ohif/core';
 import { useTranslation } from 'react-i18next';
 
-export function VolumeLighting({ viewportId, hasShade }: VolumeLightingProps): ReactElement {
+export function VolumeLighting({
+  viewportId,
+  hasShade,
+}: VolumeLightingProps): ReactElement | null {
   const { servicesManager, commandsManager } = useSystem();
   const { cornerstoneViewportService } = servicesManager.services;
   const [lightingValues, setLightingValues] = useState({
@@ -31,17 +34,24 @@ export function VolumeLighting({ viewportId, hasShade }: VolumeLightingProps): R
 
   useEffect(() => {
     const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
-    const { actor } = viewport.getActors()[0];
+    const actor = viewport?.getActors?.()?.[0]?.actor;
+    if (!actor?.getProperty) {
+      return;
+    }
     const property = actor.getProperty();
 
-    const values = {
+    setLightingValues({
       ambient: property.getAmbient(),
       diffuse: property.getDiffuse(),
       specular: property.getSpecular(),
-    };
-
-    setLightingValues(values);
+    });
   }, [viewportId, cornerstoneViewportService]);
+
+  const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+  const actor = viewport?.getActors?.()?.[0]?.actor;
+  if (!actor?.getProperty) {
+    return null;
+  }
 
   const disableOption = hasShade ? '' : 'ohif-disabled !opacity-40';
 

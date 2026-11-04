@@ -107,6 +107,15 @@ module.exports = (env, argv, { SRC_DIR, ENTRY }) => {
     module: {
       noParse: [/(dicomicc)/],
       rules: [
+        {
+          // Keep native dynamic import() for vtk-wasm glue/blob URLs.
+          test: /[\\/]@kitware[\\/]vtk-wasm[\\/].*\.mjs$/,
+          use: [
+            {
+              loader: path.resolve(__dirname, './loaders/vtkWasmWebpackIgnore.js'),
+            },
+          ],
+        },
         ...(isProdBuild
           ? []
           : [

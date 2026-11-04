@@ -1,44 +1,120 @@
 #!/usr/bin/env node
 /**
- * Download the Kitware vtk-wasm WebGL bundle into
- * platform/app/public/vtk-wasm/ for same-origin serving.
+ * Download Kitware vtk-wasm bundles into platform/app/public/vtk-wasm/ for
+ * same-origin serving:
  *
- * Keeps the .tar.gz (preferred — embeds types/ for the method table) and also
- * extracts vtkWebAssembly.mjs/.wasm for optional directory loads.
+ *   jspi/   — dist/latest (unified JSPI; PC / Chromium / JSPI Android)
+ *   compat/ — releases/9.7.0 split (non-JSPI sync WebGL; iOS Safari)
  *
  * Usage (from Viewers repo root):
  *   node scripts/fetch-vtk-wasm.mjs
+ *
+ * Env overrides:
+ *   VTK_WASM_JSPI_BUNDLE_URL
+ *   VTK_WASM_COMPAT_BUNDLE_URL
  */
-const fs = require('fs');
-const path = require('path');
-const { execFileSync } = require('child_process');
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const OUT_DIR = path.resolve(__dirname, '../platform/app/public/vtk-wasm');
-const BUNDLE_URL =
-  process.env.VTK_WASM_BUNDLE_URL ||
-  'https://raw.githack.com/Kitware/vtk-wasm/dist/latest/vtk-wasm32-emscripten.tar.gz';
-const TAR_PATH = path.join(OUT_DIR, 'vtk-wasm32-emscripten.tar.gz');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const OUT_ROOT = path.resolve(__dirname, '../platform/app/public/vtk-wasm');
 
-async function main() {
-  fs.mkdirSync(OUT_DIR, { recursive: true });
-  console.log(`Fetching ${BUNDLE_URL}`);
-  const res = await fetch(BUNDLE_URL);
+const JSPI_URL =
+  process.env.VTK_WASM_JSPI_BUNDLE_URL ||
+  'https://raw.githubusercontent.com/Kitware/vtk-wasm/dist/latest/vtk-wasm32-emscripten.tar.gz';
+
+const COMPAT_URL =
+  process.env.VTK_WASM_COMPAT_BUNDLE_URL ||
+  'https://raw.githubusercontent.com/Kitware/vtk-wasm/dist/releases/9.7.0/vtk-9.7.0-wasm32-emscripten.tar.gz';
+
+const BUNDLES = [
+  {
+    id: 'jspi',
+    url: JSPI_URL,
+    outDir: path.join(OUT_ROOT, 'jspi'),
+    tarName: 'vtk-wasm32-emscripten.tar.gz',
+    requireSuspending: true,
+    requireAsyncBinary: false,
+  },
+  {
+    id: 'compat',
+    url: COMPAT_URL,
+    outDir: path.join(OUT_ROOT, 'compat'),
+    tarName: 'vtk-9.7.0-wasm32-emscripten.tar.gz',
+    requireSuspending: false,
+    requireAsyncBinary: true,
+  },
+];
+
+async function fetchBundle({
+  id,
+  url,
+  outDir,
+  tarName,
+  requireSuspending,
+  requireAsyncBinary,
+}) {
+  fs.mkdirSync(outDir, { recursive: true });
+  const tarPath = path.join(outDir, tarName);
+  console.log(`[${id}] Fetching ${url}`);
+  const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
+    throw new Error(`[${id}] Fetch failed: ${res.status} ${res.statusText}`);
   }
   const buf = Buffer.from(await res.arrayBuffer());
-  fs.writeFileSync(TAR_PATH, buf);
-  console.log(`Wrote ${TAR_PATH} (${(buf.length / (1024 * 1024)).toFixed(1)} MiB)`);
+  fs.writeFileSync(tarPath, buf);
+  console.log(
+    `[${id}] Wrote ${tarPath} (${(buf.length / (1024 * 1024)).toFixed(1)} MiB)`
+  );
 
-  execFileSync('tar', ['-xzf', TAR_PATH, '-C', OUT_DIR], { stdio: 'inherit' });
+  execFileSync('tar', ['-xzf', tarName], {
+    cwd: outDir,
+    stdio: 'inherit',
+  });
 
-  const mjs = path.join(OUT_DIR, 'vtkWebAssembly.mjs');
-  const wasm = path.join(OUT_DIR, 'vtkWebAssembly.wasm');
-  if (!fs.existsSync(mjs) || !fs.existsSync(wasm) || !fs.existsSync(TAR_PATH)) {
-    throw new Error('Bundle incomplete after fetch/extract');
+  const mjs = path.join(outDir, 'vtkWebAssembly.mjs');
+  const wasm = path.join(outDir, 'vtkWebAssembly.wasm');
+  if (!fs.existsSync(mjs) || !fs.existsSync(wasm) || !fs.existsSync(tarPath)) {
+    throw new Error(`[${id}] Bundle incomplete after fetch/extract`);
+  }
+
+  const glue = fs.readFileSync(mjs, 'utf8');
+  const hasSuspending = glue.includes('WebAssembly.Suspending');
+  if (requireSuspending && !hasSuspending) {
+    throw new Error(
+      `[${id}] Expected JSPI glue (WebAssembly.Suspending) in vtkWebAssembly.mjs`
+    );
+  }
+  if (!requireSuspending && hasSuspending) {
+    throw new Error(
+      `[${id}] Expected non-JSPI sync glue, but found WebAssembly.Suspending`
+    );
+  }
+
+  if (requireAsyncBinary) {
+    const asyncMjs = path.join(outDir, 'vtkWebAssemblyAsync.mjs');
+    const asyncWasm = path.join(outDir, 'vtkWebAssemblyAsync.wasm');
+    if (!fs.existsSync(asyncMjs) || !fs.existsSync(asyncWasm)) {
+      throw new Error(
+        `[${id}] Expected vtkWebAssemblyAsync.{mjs,wasm} in split compat bundle`
+      );
+    }
+  }
+
+  console.log(
+    `[${id}] OK suspending=${hasSuspending} → /vtk-wasm/${id}/${tarName}`
+  );
+}
+
+async function main() {
+  fs.mkdirSync(OUT_ROOT, { recursive: true });
+  for (const bundle of BUNDLES) {
+    await fetchBundle(bundle);
   }
   console.log(
-    'Ready: point rendering.vtkWasm.url at /vtk-wasm/vtk-wasm32-emscripten.tar.gz (urlIsGzip: true).'
+    'Ready: JSPI browsers use /vtk-wasm/jspi/…; non-JSPI use /vtk-wasm/compat/…'
   );
 }
 

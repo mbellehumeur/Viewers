@@ -17,7 +17,7 @@ import {
   setSlicerLiveVolume3DShade,
   setSlicerLiveVolume3DLighting,
   setSlicerLiveVolume3DInteractionQuality,
-  setSlicerLiveVolume3DTargetMs,
+  setSlicerLiveVolume3DTargetFps,
   setSlicerLiveVolume3DMotionBudget,
   setSlicerLiveVolume3DSampleStep,
   setSlicerLiveVolume3DAccumulate,
@@ -28,6 +28,13 @@ import {
   getSlicerLiveVolume3D,
   getSlicerLiveVolume3DCropEnabled,
   setSlicerLiveVolume3DCropEnabled,
+  setRenderBackend,
+  isRegisteredRenderBackend,
+  getConfiguration,
+  setConfiguration,
+  getEffectiveRenderBackend,
+  VTK_WASM_BRICK_PRESETS,
+  isVtkWasmBrickPresetId,
 } from '@cornerstonejs/core';
 import {
   ToolGroupManager,
@@ -109,6 +116,7 @@ const VOLUME_3D_PATH_RENDER_MODES = new Set([
   'mviewVolume3d',
   'vtkVolume3d',
   'vtkWasmVolume3d',
+  'vtkWasmWebgpuVolume3d',
 ]);
 
 function defaultNextVolume3DRenderMode(): string {
@@ -121,6 +129,20 @@ function syncVolume3DRenderModeUrlParam(mode: string | undefined): void {
       url.searchParams.set('renderMode', mode);
     } else {
       url.searchParams.delete('renderMode');
+    }
+    window.history.replaceState(window.history.state, '', url.toString());
+  } catch {
+    // SSR / non-browser
+  }
+}
+
+function syncViewportRenderingUrlParam(backend: string | undefined): void {
+  try {
+    const url = new URL(window.location.href);
+    if (backend) {
+      url.searchParams.set('viewportRendering', backend);
+    } else {
+      url.searchParams.delete('viewportRendering');
     }
     window.history.replaceState(window.history.state, '', url.toString());
   } catch {
@@ -1756,6 +1778,120 @@ function commandsModule({
       renderingEngine?.resize?.(true);
       viewport.render?.();
     },
+    /**
+     * Switch planar (MPR/stack) render backend. Live-rebuilds mounted planar
+     * viewports via cornerstone.setRenderBackend; syncs ?viewportRendering=.
+     */
+    setPlanarRenderBackend: ({ backend }) => {
+      if (typeof backend !== 'string' || !backend) {
+        return;
+      }
+      if (backend !== 'auto' && !isRegisteredRenderBackend(backend)) {
+        console.warn(
+          `setPlanarRenderBackend: "${backend}" is not a registered render backend; ignoring.`
+        );
+        return;
+      }
+
+      setRenderBackend(backend);
+      syncViewportRenderingUrlParam(backend);
+    },
+    /**
+     * Update VTK WASM WebGL brick partition preset for the active viewport path
+     * (MPR or Volume3D) and remount so bindings pick up the new grid.
+     */
+    setVtkWasmBrickPreset: async ({ viewportId, preset }) => {
+      if (!viewportId || typeof preset !== 'string' || !isVtkWasmBrickPresetId(preset)) {
+        return;
+      }
+
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId) as
+        | {
+            type?: string;
+            getActiveRenderMode?: () => string;
+            setDisplaySets?: (
+              ...entries: Array<{ displaySetId: string; options?: Record<string, unknown> }>
+            ) => Promise<void>;
+            resize?: () => void;
+            render?: () => void;
+          }
+        | null
+        | undefined;
+
+      if (!viewport?.setDisplaySets) {
+        return;
+      }
+
+      const isVolume3D =
+        typeof viewport.getActiveRenderMode === 'function' ||
+        isVolume3DViewportType(viewport);
+
+      const activeMode = isVolume3D
+        ? (viewport.getActiveRenderMode?.() ?? '')
+        : getEffectiveRenderBackend();
+
+      const isWasmWebgl = isVolume3D
+        ? activeMode === 'vtkWasmVolume3d'
+        : activeMode === 'vtkWasm';
+
+      if (!isWasmWebgl) {
+        return;
+      }
+
+      const pathKey = isVolume3D ? 'brickPartitionsVolume3d' : 'brickPartitionsMpr';
+      const config = getConfiguration();
+      const presetOptions = VTK_WASM_BRICK_PRESETS[preset];
+
+      setConfiguration({
+        ...config,
+        rendering: {
+          ...config.rendering,
+          vtkWasm: {
+            ...config.rendering?.vtkWasm,
+            [pathKey]: presetOptions,
+          },
+        },
+      });
+
+      const displaySetUIDs = viewportGridService.getDisplaySetsUIDsForViewport(viewportId) ?? [];
+      if (!displaySetUIDs.length) {
+        return;
+      }
+
+      if (isVolume3D) {
+        await viewport.setDisplaySets(
+          ...displaySetUIDs.map(displaySetId => ({
+            displaySetId,
+            options: { renderMode: 'vtkWasmVolume3d' },
+          }))
+        );
+
+        const viewportInfo = cornerstoneViewportService.getViewportInfo(viewportId);
+        const displayPreset = viewportInfo?.getDisplaySetOptions?.()?.[0]?.displayPreset as
+          | string
+          | Record<string, string>
+          | undefined;
+        const displaySet = displaySetService.getDisplaySetByUID(displaySetUIDs[0]);
+        const modality = displaySet?.Modality;
+        const presetName =
+          typeof displayPreset === 'string'
+            ? displayPreset
+            : displayPreset?.[modality] || displayPreset?.default || 'CT-Bone';
+        ops.setPreset(viewport as Parameters<typeof ops.setPreset>[0], presetName);
+      } else {
+        await viewport.setDisplaySets(
+          ...displaySetUIDs.map(displaySetId => ({
+            displaySetId,
+            options: { renderBackend: 'vtkWasm' },
+          }))
+        );
+      }
+
+      viewport.resize?.();
+      const renderingEngine = cornerstoneViewportService.getRenderingEngine();
+      renderingEngine?.resize?.(true);
+      viewport.render?.();
+    },
     setMviewVolumeProjection: ({ viewportId, projection }) => {
       if (!viewportId || !isMviewVolume3DProjection(projection)) {
         return;
@@ -1857,11 +1993,11 @@ function commandsModule({
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
       viewport?.render?.();
     },
-    setSlicerLiveVolumeTargetMs: ({ viewportId, targetMs }) => {
-      if (!viewportId || !Number.isFinite(targetMs)) {
+    setSlicerLiveVolumeTargetFps: ({ viewportId, fps }) => {
+      if (!viewportId || !Number.isFinite(fps)) {
         return;
       }
-      if (!setSlicerLiveVolume3DTargetMs(viewportId, targetMs)) {
+      if (!setSlicerLiveVolume3DTargetFps(viewportId, fps)) {
         return;
       }
       const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
@@ -3116,6 +3252,12 @@ function commandsModule({
     setVolume3DRenderMode: {
       commandFn: actions.setVolume3DRenderMode,
     },
+    setPlanarRenderBackend: {
+      commandFn: actions.setPlanarRenderBackend,
+    },
+    setVtkWasmBrickPreset: {
+      commandFn: actions.setVtkWasmBrickPreset,
+    },
     setViewportBackendLane: {
       commandFn: actions.setViewportBackendLane,
     },
@@ -3149,8 +3291,8 @@ function commandsModule({
     setSlicerLiveVolumeInteractionQuality: {
       commandFn: actions.setSlicerLiveVolumeInteractionQuality,
     },
-    setSlicerLiveVolumeTargetMs: {
-      commandFn: actions.setSlicerLiveVolumeTargetMs,
+    setSlicerLiveVolumeTargetFps: {
+      commandFn: actions.setSlicerLiveVolumeTargetFps,
     },
     setSlicerLiveVolumeMotionBudget: {
       commandFn: actions.setSlicerLiveVolumeMotionBudget,

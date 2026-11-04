@@ -62,9 +62,11 @@
     "cs3d:watch": "cd libs/@cornerstonejs && pnpm run build:esm:watch",
     "cs3d:install": "cd libs/@cornerstonejs && pnpm install",
     "cs3d:link": "node libs/@cornerstonejs/scripts/link-ohif-cornerstone-node-modules.mjs .",
+    "cs3d:link:win": "powershell -NoProfile -ExecutionPolicy Bypass -File .scripts/link-cs3d-junctions.ps1",
     "cs3d:unlink": "node libs/@cornerstonejs/scripts/unlink-ohif-cornerstone-node-modules.mjs ."
   },
   "dependencies": {
+    "@kitware/vtk-wasm": "^3.0.1",
     "execa": "8.0.1"
   },
   "devDependencies": {
@@ -123,6 +125,11 @@
       "prettier --write",
       "git add"
     ]
+  },
+  "pnpm": {
+    "overrides": {
+      "@kitware/vtk.js": "file:../vtk-js/dist/esm"
+    }
   },
   "version": "3.13.0-beta.125"
 }

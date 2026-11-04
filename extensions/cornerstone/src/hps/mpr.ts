@@ -24,27 +24,7 @@ const viewportStructure = {
   layoutType: 'grid',
   properties: {
     rows: 1,
-    columns: 3,
-    layoutOptions: [
-      {
-        x: 0,
-        y: 0,
-        width: 1 / 3,
-        height: 1,
-      },
-      {
-        x: 1 / 3,
-        y: 0,
-        width: 1 / 3,
-        height: 1,
-      },
-      {
-        x: 2 / 3,
-        y: 0,
-        width: 1 / 3,
-        height: 1,
-      },
-    ],
+    columns: 1,
   },
 };
 
@@ -80,107 +60,15 @@ export const mpr: Types.HangingProtocol.Protocol = {
   },
   stages: [
     {
-      name: 'MPR 1x3',
+      name: 'MPR Sagittal',
       viewportStructure,
       viewports: [
-        {
-          viewportOptions: {
-            viewportId: 'mpr-axial',
-            toolGroupId: 'mpr',
-            viewportType: 'volume',
-            orientation: 'axial',
-            initialImageOptions: {
-              preset: 'middle',
-            },
-            syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
-          },
-          displaySets: [
-            {
-              id: 'activeDisplaySet',
-            },
-          ],
-        },
         {
           viewportOptions: {
             viewportId: 'mpr-sagittal',
             toolGroupId: 'mpr',
             viewportType: 'volume',
             orientation: 'sagittal',
-            initialImageOptions: {
-              preset: 'middle',
-            },
-            syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
-          },
-          displaySets: [
-            {
-              id: 'activeDisplaySet',
-            },
-          ],
-        },
-        {
-          viewportOptions: {
-            viewportId: 'mpr-coronal',
-            toolGroupId: 'mpr',
-            viewportType: 'volume',
-            orientation: 'coronal',
-            initialImageOptions: {
-              preset: 'middle',
-            },
-            syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
-          },
-          displaySets: [
-            {
-              id: 'activeDisplaySet',
-            },
-          ],
-        },
-      ],
-    },
-
-    {
-      name: 'MPR Reformat 1x3',
-      viewportStructure,
-      viewports: [
-        {
-          viewportOptions: {
-            viewportId: 'mpr-axial',
-            toolGroupId: 'mpr',
-            viewportType: 'volume',
-            orientation: 'axial_reformat',
-            initialImageOptions: {
-              preset: 'middle',
-            },
-            syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
-          },
-          displaySets: [
-            {
-              id: 'activeDisplaySet',
-            },
-          ],
-        },
-        {
-          viewportOptions: {
-            viewportId: 'mpr-sagittal',
-            toolGroupId: 'mpr',
-            viewportType: 'volume',
-            orientation: 'sagittal_reformat',
-            initialImageOptions: {
-              preset: 'middle',
-            },
-            syncGroups: [VOI_SYNC_GROUP, HYDRATE_SEG_SYNC_GROUP],
-          },
-          displaySets: [
-            {
-              id: 'activeDisplaySet',
-            },
-          ],
-        },
-        {
-          viewportOptions: {
-            viewportId: 'mpr-coronal',
-            toolGroupId: 'mpr',
-            viewportType: 'volume',
-            orientation: 'coronal_reformat',
             initialImageOptions: {
               preset: 'middle',
             },
