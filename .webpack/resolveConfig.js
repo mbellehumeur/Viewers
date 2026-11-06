@@ -79,9 +79,32 @@ function resolveSlicerHubI18nRoot() {
   return null;
 }
 
+function resolveSlicerHubConferenceUiRoot() {
+  const candidates = [
+    path.resolve(__dirname, '../../SlicerHub-js-clients/packages/conference-ui'),
+    path.resolve(
+      __dirname,
+      '../platform/app/node_modules/@slicer-hub/conference-ui'
+    ),
+  ];
+  for (const root of candidates) {
+    try {
+      const realRoot = fs.realpathSync(root);
+      const entry = path.join(realRoot, 'dist', 'conference-ui.js');
+      if (fs.existsSync(entry)) {
+        return realRoot;
+      }
+    } catch {
+      // skip
+    }
+  }
+  return null;
+}
+
 const slicerHubClientRoot = resolveSlicerHubClientRoot();
 const slicerHubFlexrayWebRoot = resolveSlicerHubFlexrayWebRoot();
 const slicerHubI18nRoot = resolveSlicerHubI18nRoot();
+const slicerHubConferenceUiRoot = resolveSlicerHubConferenceUiRoot();
 
 const alias = {
   // Some extensions import app-level utilities (e.g. history,
@@ -123,6 +146,15 @@ const alias = {
         // nested node_modules copy that babel excludes.
         '@slicer-hub/i18n$': path.join(slicerHubI18nRoot, 'index.ts'),
         '@slicer-hub/i18n': path.join(slicerHubI18nRoot, 'index.ts'),
+      }
+    : {}),
+  ...(slicerHubConferenceUiRoot
+    ? {
+        '@slicer-hub/conference-ui$': path.join(
+          slicerHubConferenceUiRoot,
+          'dist',
+          'conference-ui.js'
+        ),
       }
     : {}),
 };
