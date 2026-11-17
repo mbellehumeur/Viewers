@@ -29,6 +29,7 @@ import {
   colorPickerDialog,
   callInputDialog,
 } from '@ohif/extension-default';
+import { vec3, mat4 } from 'gl-matrix';
 import toggleImageSliceSync from './utils/imageSliceSync/toggleImageSliceSync';
 // Sanctioned flag read: RTSTRUCT contour hydration pins the referenced image to
 // stack mode on the native ("next") path, a decision made before a target viewport exists.
@@ -2250,6 +2251,84 @@ function commandsModule({
       viewportInfo.setOrientation(orientation);
     },
     /**
+     * Sets the 3D volume viewport camera to look from a standard anatomical
+     * direction (S, P, R, L, A, I). Only applies to VOLUME_3D viewports.
+     */
+    setViewport3DViewDirection: ({
+      viewportId,
+      direction,
+    }: {
+      viewportId: string;
+      direction: 'S' | 'P' | 'R' | 'L' | 'A' | 'I';
+    }) => {
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      if (!viewport || !isVolume3DViewportType(viewport)) {
+        return;
+      }
+      const camera = viewport.getCamera();
+      const focalPoint = camera.focalPoint as [number, number, number];
+      const position = camera.position as [number, number, number];
+      const dir = vec3.sub(vec3.create(), position, focalPoint);
+      const distance = Math.max(vec3.length(dir), 1e-6);
+      // RAS: R +x, A +y, S +z. Look from = camera position axis; viewUp upright.
+      const axes: Record<
+        string,
+        { offset: [number, number, number]; viewUp: [number, number, number] }
+      > = {
+        S: { offset: [0, 0, 1], viewUp: [0, 1, 0] },
+        I: { offset: [0, 0, -1], viewUp: [0, 1, 0] },
+        R: { offset: [-1, 0, 0], viewUp: [0, 0, 1] },
+        L: { offset: [1, 0, 0], viewUp: [0, 0, 1] },
+        A: { offset: [0, -1, 0], viewUp: [0, 0, 1] },
+        P: { offset: [0, 1, 0], viewUp: [0, 0, 1] },
+      };
+      const { offset, viewUp } = axes[direction] || {};
+      if (!offset) {
+        return;
+      }
+      const newPosition = vec3.add(
+        vec3.create(),
+        focalPoint,
+        vec3.scale(vec3.create(), vec3.fromValues(...offset), distance)
+      ) as CoreTypes.Point3;
+      viewport.setCamera({
+        position: newPosition,
+        focalPoint: focalPoint as CoreTypes.Point3,
+        viewUp: viewUp as CoreTypes.Point3,
+      });
+      viewport.render();
+    },
+    /**
+     * Rotates the 3D volume viewport camera by an angle (degrees) around z.
+     * Used for spin animation. Only applies to VOLUME_3D viewports.
+     */
+    rotateViewport3DBy: ({
+      viewportId,
+      angle,
+    }: {
+      viewportId: string;
+      angle: number;
+    }) => {
+      const viewport = cornerstoneViewportService.getCornerstoneViewport(viewportId);
+      if (!viewport || !isVolume3DViewportType(viewport)) {
+        return;
+      }
+      const camera = viewport.getCamera();
+      const focalPoint = camera.focalPoint as [number, number, number];
+      const position = camera.position as [number, number, number];
+      const viewUp = camera.viewUp as [number, number, number];
+      const zAxis: [number, number, number] = [0, 0, 1];
+      const rotAngle = (angle * Math.PI) / 180;
+      const rotMat = mat4.identity(new Float32Array(16));
+      mat4.rotate(rotMat, rotMat, rotAngle, zAxis);
+      const offset = vec3.sub(vec3.create(), position, focalPoint);
+      const newOffset = vec3.transformMat4(vec3.create(), offset, rotMat);
+      const newPosition = vec3.add(vec3.create(), focalPoint, newOffset) as CoreTypes.Point3;
+      const newViewUp = vec3.transformMat4(vec3.create(), viewUp, rotMat) as CoreTypes.Point3;
+      viewport.setCamera({ position: newPosition, viewUp: newViewUp });
+      viewport.render();
+    },
+    /**
      * Toggles the horizontal flip state of the viewport.
      */
     toggleViewportHorizontalFlip: ({ viewportId }: { viewportId?: string } = {}) => {
@@ -2719,6 +2798,12 @@ function commandsModule({
     setViewportPreset: {
       commandFn: actions.setViewportPreset,
     },
+    setViewport3DViewDirection: {
+      commandFn: actions.setViewport3DViewDirection,
+    },
+    rotateViewport3DBy: {
+      commandFn: actions.rotateViewport3DBy,
+    },
     setVolumeRenderingQulaity: {
       commandFn: actions.setVolumeRenderingQulaity,
     },
@@ -2855,6 +2940,8 @@ function commandsModule({
     addNewSegment: actions.addNewSegment,
     loadSegmentationDisplaySetsForViewport: actions.loadSegmentationDisplaySetsForViewport,
     setViewportOrientation: actions.setViewportOrientation,
+    setViewport3DViewDirection: actions.setViewport3DViewDirection,
+    rotateViewport3DBy: actions.rotateViewport3DBy,
     hydrateSecondaryDisplaySet: actions.hydrateSecondaryDisplaySet,
     loadDisplaySetData: actions.loadDisplaySetData,
     getVolumeIdForDisplaySet: actions.getVolumeIdForDisplaySet,
