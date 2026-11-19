@@ -25,6 +25,15 @@ export const fourUp = {
           },
           required: true,
         },
+        {
+          attribute: 'Modality',
+          constraint: {
+            doesNotEqual: {
+              value: 'SEG',
+            },
+          },
+          required: true,
+        },
       ],
     },
   },

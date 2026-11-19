@@ -305,7 +305,7 @@ function _getDisplaySetsFromSeries(
 
   const referencedSeries = referencedSeriesSequence[0] || referencedSeriesSequence;
 
-  displaySet.referencedImages = instance.ReferencedSeriesSequence.ReferencedInstanceSequence;
+  displaySet.referencedImages = referencedSeries.ReferencedInstanceSequence;
   displaySet.referencedSeriesInstanceUID = referencedSeries.SeriesInstanceUID;
   const { displaySetService } = servicesManager.services;
   const referencedDisplaySets = displaySetService.getDisplaySetsForReferences(
@@ -329,8 +329,10 @@ function _getDisplaySetsFromSeries(
         // does not contain the referenced display set uid , and we can just
         // see which of the display sets added is more similar and assign it
         // to the referencedDisplaySet
-        const addedDisplaySet = displaySetsAdded[0];
-        if (addedDisplaySet.SeriesInstanceUID === displaySet.referencedSeriesInstanceUID) {
+        const addedDisplaySet = displaySetsAdded?.find(
+          ds => ds.SeriesInstanceUID === displaySet.referencedSeriesInstanceUID
+        );
+        if (addedDisplaySet) {
           displaySet.referencedDisplaySetInstanceUID = addedDisplaySet.displaySetInstanceUID;
           displaySet.isReconstructable = addedDisplaySet.isReconstructable;
           displaySet.FrameOfReferenceUID = addedDisplaySet.FrameOfReferenceUID;

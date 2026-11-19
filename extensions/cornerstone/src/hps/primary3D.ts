@@ -25,6 +25,15 @@ export const primary3D = {
           },
           required: true,
         },
+        {
+          attribute: 'Modality',
+          constraint: {
+            doesNotEqual: {
+              value: 'SEG',
+            },
+          },
+          required: true,
+        },
       ],
     },
   },

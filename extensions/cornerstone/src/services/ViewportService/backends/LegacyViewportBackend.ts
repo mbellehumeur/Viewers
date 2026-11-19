@@ -234,6 +234,13 @@ export class LegacyViewportBackend implements IViewportBackend {
       return;
     }
 
+    // Volume3d appearance is preset-driven (RGBA transfer function). Applying a
+    // planar voiRange/colormap via setProperties rebuilds a linear RGB TF and
+    // wipes CT-Bone after SEG hydrate remounts — leave 3D LUT alone here.
+    if (isVolume3DViewportType(viewport)) {
+      return;
+    }
+
     const vp = viewport as Types.IStackViewport | Types.IVolumeViewport;
     const { properties } = lutPresentation;
     if (isVolumeViewportType(vp)) {

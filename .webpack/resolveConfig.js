@@ -16,13 +16,14 @@ const path = require('path');
 // is doing the resolving.
 
 function resolveSlicerHubClientRoot() {
-  // Out-of-tree @slicer-hub/ohif-extension lives under SlicerHub-js-clients.
+  // Out-of-tree @slicer-hub/ohif-extension lives under SlicerWebSub-js.
   // With resolve.symlinks=true, rspack resolves from that real path and often
   // fails to find the app-linked @slicer-hub/client via node_modules walk-up.
   // Prefer the sibling checkout real path (avoids Windows symlink + file-alias
   // issues); fall back to the app-linked package. Alias the package root so
   // package.json exports/mainFields apply (not a direct dist file path).
   const candidates = [
+    path.resolve(__dirname, '../../pw46/SlicerWebSub-js/packages/client'),
     path.resolve(__dirname, '../../SlicerHub-js-clients/packages/client'),
     path.resolve(__dirname, '../platform/app/node_modules/@slicer-hub/client'),
   ];
@@ -42,6 +43,7 @@ function resolveSlicerHubClientRoot() {
 
 function resolveSlicerHubFlexrayWebRoot() {
   const candidates = [
+    path.resolve(__dirname, '../../pw46/SlicerWebSub-js/packages/flexray-web'),
     path.resolve(__dirname, '../../SlicerHub-js-clients/packages/flexray-web'),
     path.resolve(
       __dirname,
@@ -63,6 +65,7 @@ function resolveSlicerHubFlexrayWebRoot() {
 
 function resolveSlicerHubI18nRoot() {
   const candidates = [
+    path.resolve(__dirname, '../../pw46/SlicerWebSub-js/packages/i18n'),
     path.resolve(__dirname, '../../SlicerHub-js-clients/packages/i18n'),
     path.resolve(__dirname, '../platform/app/node_modules/@slicer-hub/i18n'),
   ];
@@ -81,6 +84,7 @@ function resolveSlicerHubI18nRoot() {
 
 function resolveSlicerHubConferenceUiRoot() {
   const candidates = [
+    path.resolve(__dirname, '../../pw46/SlicerWebSub-js/packages/conference-ui'),
     path.resolve(__dirname, '../../SlicerHub-js-clients/packages/conference-ui'),
     path.resolve(
       __dirname,

@@ -3,12 +3,14 @@ import {
   setupSegmentationDataModifiedHandler,
   setupSegmentationModifiedHandler,
   setUpSelectedSegmentationsForViewportHandler,
+  setupVolume3dPresetAfterSurfaceHandler,
 } from './segmentationHandlers';
 
 jest.mock('./segmentationHandlers', () => ({
   setupSegmentationDataModifiedHandler: jest.fn(),
   setupSegmentationModifiedHandler: jest.fn(),
   setUpSelectedSegmentationsForViewportHandler: jest.fn(),
+  setupVolume3dPresetAfterSurfaceHandler: jest.fn(),
 }));
 
 describe('setUpSegmentationEventHandlers', () => {
@@ -28,6 +30,12 @@ describe('setUpSegmentationEventHandlers', () => {
     addDisplaySets: jest.fn(),
   };
 
+  const mockViewportGridService = {
+    getState: jest.fn(),
+  };
+
+  const mockCornerstoneViewportService = {};
+
   const mockCommandsManager = {};
 
   const mockServicesManager = {
@@ -35,11 +43,14 @@ describe('setUpSegmentationEventHandlers', () => {
       segmentationService: mockSegmentationService,
       customizationService: mockCustomizationService,
       displaySetService: mockDisplaySetService,
+      viewportGridService: mockViewportGridService,
+      cornerstoneViewportService: mockCornerstoneViewportService,
     },
   };
 
   const mockUnsubscribeDataModified = jest.fn();
   const mockUnsubscribeModified = jest.fn();
+  const mockUnsubscribeVolume3dPreset = jest.fn();
   const mockUnsubscribeCreated = jest.fn();
   const mockUnsubscribeRemoved = jest.fn();
   const mockUnsubscribeSelectedSegmentationsForViewportEvents = [jest.fn(), jest.fn()];
@@ -56,6 +67,9 @@ describe('setUpSegmentationEventHandlers', () => {
     });
     (setupSegmentationModifiedHandler as jest.Mock).mockReturnValue({
       unsubscribe: mockUnsubscribeModified,
+    });
+    (setupVolume3dPresetAfterSurfaceHandler as jest.Mock).mockReturnValue({
+      unsubscribe: mockUnsubscribeVolume3dPreset,
     });
     (setUpSelectedSegmentationsForViewportHandler as jest.Mock).mockReturnValue({
       unsubscribeSelectedSegmentationsForViewportEvents:
@@ -99,6 +113,18 @@ describe('setUpSegmentationEventHandlers', () => {
     );
   });
 
+  it('should setup volume3d preset-after-surface handler', () => {
+    setUpSegmentationEventHandlers(defaultParameters);
+
+    expect(setupVolume3dPresetAfterSurfaceHandler).toHaveBeenCalledWith({
+      segmentationService: mockSegmentationService,
+      cornerstoneViewportService: mockCornerstoneViewportService,
+      displaySetService: mockDisplaySetService,
+      viewportGridService: mockViewportGridService,
+      commandsManager: mockCommandsManager,
+    });
+  });
+
   it('should return unsubscriptions object', () => {
     const result = setUpSegmentationEventHandlers(defaultParameters);
 
@@ -106,6 +132,7 @@ describe('setUpSegmentationEventHandlers', () => {
       unsubscriptions: [
         mockUnsubscribeDataModified,
         mockUnsubscribeModified,
+        mockUnsubscribeVolume3dPreset,
         mockUnsubscribeCreated,
         mockUnsubscribeRemoved,
         ...mockUnsubscribeSelectedSegmentationsForViewportEvents,

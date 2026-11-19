@@ -560,9 +560,17 @@ class SegmentationService extends PubSubService implements ISegmentationServiceI
 
     segmentationId = segmentationId ?? segDisplaySet.displaySetInstanceUID;
     const referencedDisplaySetInstanceUID = segDisplaySet.referencedDisplaySetInstanceUID;
+    if (!referencedDisplaySetInstanceUID) {
+      throw new Error('referencedDisplaySetInstanceUID is missing for SEG');
+    }
     const referencedDisplaySet = this.servicesManager.services.displaySetService.getDisplaySetByUID(
       referencedDisplaySetInstanceUID
     );
+    if (!referencedDisplaySet) {
+      throw new Error(
+        `referencedDisplaySet is missing for SEG (uid=${referencedDisplaySetInstanceUID})`
+      );
+    }
 
     const images = referencedDisplaySet.instances;
 

@@ -632,6 +632,12 @@ export class NextViewportBackend implements IViewportBackend {
     if (!lutPresentation) {
       return;
     }
+    // Volume3d appearance is preset-driven (RGBA transfer function). Applying a
+    // planar voiRange/colormap via setDisplaySetPresentation rebuilds a linear RGB
+    // TF and wipes CT-Bone after SEG hydrate remounts — leave 3D LUT alone here.
+    if (isVolume3DViewportType(viewport)) {
+      return;
+    }
     const { properties } = lutPresentation;
     // Native LUT presentation is the getDisplaySetPresentation shape (voiRange/
     // colormap/invert), not a per-volumeId Map; a PLANAR_NEXT viewport applies it via

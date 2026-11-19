@@ -26,12 +26,11 @@ function OHIFCornerstoneSEGViewport(props: withAppTypes) {
 
   const toolGroupId = `${SEG_TOOLGROUP_BASE_NAME}-${viewportId}`;
 
-  // SEG viewport will always have a single display set
-  if (displaySets.length > 1) {
-    throw new Error('SEG viewport should only have a single display set');
-  }
-
-  const segDisplaySet = displaySets[0];
+  // Prefer the SEG overlay when a viewport accidentally carries CT+SEG together
+  // (layer-add / hanging-protocol race). Do not throw — that crashes the grid.
+  const segDisplaySet =
+    displaySets.find(ds => ds?.Modality === 'SEG' || ds?.isOverlayDisplaySet) ||
+    displaySets[0];
   const [viewportGrid, viewportGridService] = useViewportGrid();
 
   // States

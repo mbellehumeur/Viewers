@@ -656,15 +656,35 @@ export default class HangingProtocolService extends PubSubService {
       return defaultReturn;
     }
 
-    const { displaySetService } = this._servicesManager.services;
+    const { displaySetService, viewportGridService } = this._servicesManager.services;
     const displaySet = displaySetService.getDisplaySetByUID(displaySetInstanceUID);
     if (displaySet?.unsupported) {
       throw new Error('Unsupported displaySet');
     }
-    // Overlays (SEG, RTSTRUCT) share selectors with referenced volumes but must not
-    // sync to every matched viewport before hydration (would replace e.g. 3D primary).
+    // Overlays (SEG, RTSTRUCT) must not sync to every matched viewport (would replace
+    // e.g. 3D primary). Hang background + overlay on this viewport only so
+    // ViewportGrid keeps the volume component (displaySets[0] stays non-SEG).
     if (displaySet?.isOverlayDisplaySet) {
-      return defaultReturn;
+      const currentViewport = viewportGridService?.getState?.()?.viewports?.get(viewportId);
+      const currentUIDs: string[] = currentViewport?.displaySetInstanceUIDs || [];
+      const backgroundUIDs = currentUIDs.filter(uid => {
+        const ds = displaySetService.getDisplaySetByUID(uid);
+        return ds && !ds.isOverlayDisplaySet;
+      });
+      const backgroundUID =
+        backgroundUIDs[0] || displaySet.referencedDisplaySetInstanceUID || undefined;
+      if (!backgroundUID) {
+        return defaultReturn;
+      }
+      return [
+        {
+          viewportId,
+          displaySetInstanceUIDs: [backgroundUID, newDisplaySetInstanceUID],
+          viewportOptions: currentViewport?.viewportOptions
+            ? { ...currentViewport.viewportOptions }
+            : undefined,
+        },
+      ];
     }
 
     const protocol = this.protocol;
@@ -1543,6 +1563,10 @@ export default class HangingProtocolService extends PubSubService {
 
       this.debug('study', study.StudyInstanceUID, 'display sets #', studyDisplaySets.length);
       studyDisplaySets.forEach(displaySet => {
+        // Overlays (SEG, RTSTRUCT, …) must never win as hanging-protocol backgrounds.
+        if (displaySet?.isOverlayDisplaySet) {
+          return;
+        }
         const { StudyInstanceUID, SeriesInstanceUID, displaySetInstanceUID } = displaySet;
         const seriesMatchDetails = this.protocolEngine.findMatch(
           displaySet,

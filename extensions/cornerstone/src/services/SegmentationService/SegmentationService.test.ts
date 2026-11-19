@@ -1452,7 +1452,7 @@ describe('SegmentationService', () => {
       ).rejects.toThrow('SEG reading failed');
     });
 
-    it('should throw an error if the referenced display set is not found', async () => {
+    it('should throw an error if the referenced display set has no instances', async () => {
       jest
         .spyOn(serviceManagerMock.services.displaySetService, 'getDisplaySetByUID')
         .mockReturnValue({
@@ -1466,6 +1466,29 @@ describe('SegmentationService', () => {
           labelMapImages: [{}, {}],
         })
       ).rejects.toThrow('No instances were provided for the referenced display set of the SEG');
+    });
+
+    it('should throw an error if the referenced display set UID is missing from the cache', async () => {
+      jest
+        .spyOn(serviceManagerMock.services.displaySetService, 'getDisplaySetByUID')
+        .mockReturnValue(undefined);
+
+      await expect(
+        service.createSegmentationForSEGDisplaySet({
+          displaySetInstanceUID: 'display-set-uid',
+          referencedDisplaySetInstanceUID: 'stale-display-set-uid',
+          labelMapImages: [{}, {}],
+        })
+      ).rejects.toThrow('referencedDisplaySet is missing for SEG');
+    });
+
+    it('should throw an error if referencedDisplaySetInstanceUID is missing', async () => {
+      await expect(
+        service.createSegmentationForSEGDisplaySet({
+          displaySetInstanceUID: 'display-set-uid',
+          labelMapImages: [{}, {}],
+        })
+      ).rejects.toThrow('referencedDisplaySetInstanceUID is missing for SEG');
     });
 
     it('it should create a segmentation for a SEG display set', async () => {

@@ -459,9 +459,18 @@ class CornerstoneViewportService
       : cleanProperties(getViewportAdapter(csViewport).getPresentation());
 
     if (properties instanceof Map) {
-      const volumeIds = (csViewport as Types.IBaseVolumeViewport).getAllVolumeIds();
+      const volumeViewport = csViewport as Types.IBaseVolumeViewport;
+      // Native VOLUME_3D_NEXT may not expose legacy getAllVolumeIds / getProperties;
+      // an empty Map still keeps setLutPresentation off the planar VOI path.
+      const volumeIds =
+        typeof volumeViewport.getAllVolumeIds === 'function'
+          ? volumeViewport.getAllVolumeIds()
+          : undefined;
       volumeIds?.forEach(volumeId => {
-        const csProps = cleanProperties(csViewport.getProperties(volumeId));
+        if (typeof volumeViewport.getProperties !== 'function') {
+          return;
+        }
+        const csProps = cleanProperties(volumeViewport.getProperties(volumeId));
         properties.set(volumeId, csProps);
       });
     }

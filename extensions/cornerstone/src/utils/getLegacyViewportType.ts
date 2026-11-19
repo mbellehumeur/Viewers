@@ -55,10 +55,18 @@ export function isVolume3DViewportType(viewport: unknown): viewport is csTypes.I
 }
 
 /**
- * Legacy ORTHOGRAPHIC or VOLUME_3D viewport (i.e. a `BaseVolumeViewport`).
- * Replaces `instanceof BaseVolumeViewport`.
+ * Volume-family viewport (ORTHOGRAPHIC / VOLUME_3D), including native
+ * `VOLUME_3D_NEXT`. Replaces `instanceof BaseVolumeViewport`.
+ *
+ * Including `VOLUME_3D_NEXT` keeps lut capture on the per-volume Map path (with
+ * `preset`) instead of planar presentation, so SEG hydrate remounts do not treat
+ * native 3D like a stack/MPR LUT restore target.
  */
 export function isVolumeViewportType(viewport: unknown): viewport is csTypes.IVolumeViewport {
   const legacyType = getLegacyViewportType(viewport);
-  return legacyType === ViewportType.ORTHOGRAPHIC || legacyType === ViewportType.VOLUME_3D;
+  return (
+    legacyType === ViewportType.ORTHOGRAPHIC ||
+    legacyType === ViewportType.VOLUME_3D ||
+    legacyType === ViewportType.VOLUME_3D_NEXT
+  );
 }

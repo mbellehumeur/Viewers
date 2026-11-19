@@ -4,11 +4,17 @@ import {
   setUpSelectedSegmentationsForViewportHandler,
   setupSegmentationDataModifiedHandler,
   setupSegmentationModifiedHandler,
+  setupVolume3dPresetAfterSurfaceHandler,
 } from './segmentationHandlers';
 
 export const setUpSegmentationEventHandlers = ({ servicesManager, commandsManager }) => {
-  const { segmentationService, customizationService, displaySetService, viewportGridService } =
-    servicesManager.services;
+  const {
+    segmentationService,
+    customizationService,
+    displaySetService,
+    viewportGridService,
+    cornerstoneViewportService,
+  } = servicesManager.services;
 
   const { unsubscribe: unsubscribeSegmentationDataModifiedHandler } =
     setupSegmentationDataModifiedHandler({
@@ -20,6 +26,15 @@ export const setUpSegmentationEventHandlers = ({ servicesManager, commandsManage
   const { unsubscribe: unsubscribeSegmentationModifiedHandler } = setupSegmentationModifiedHandler({
     segmentationService,
   });
+
+  const { unsubscribe: unsubscribeVolume3dPresetAfterSurface } =
+    setupVolume3dPresetAfterSurfaceHandler({
+      segmentationService,
+      cornerstoneViewportService,
+      displaySetService,
+      viewportGridService,
+      commandsManager,
+    });
 
   const { unsubscribe: unsubscribeSegmentationCreated } = segmentationService.subscribe(
     segmentationService.EVENTS.SEGMENTATION_ADDED,
@@ -113,6 +128,7 @@ export const setUpSegmentationEventHandlers = ({ servicesManager, commandsManage
   const unsubscriptions = [
     unsubscribeSegmentationDataModifiedHandler,
     unsubscribeSegmentationModifiedHandler,
+    unsubscribeVolume3dPresetAfterSurface,
     unsubscribeSegmentationCreated,
     unsubscribeSegmentationRemoved,
     ...unsubscribeSelectedSegmentationsForViewportEvents,
